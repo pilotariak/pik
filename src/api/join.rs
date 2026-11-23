@@ -225,7 +225,7 @@ pub(super) async fn claim(mut req: Request, ctx: RouteContext<()>) -> ApiResult<
     let db = database(&ctx.env)?;
     let now = now()?;
     rate_limit::check(&ctx.env, &req, Limit::Claim).await?;
-    let player = auth::optional_player(&req, &db, now, UnknownToken::AsNone).await?;
+    let player = auth::optional_player(&req, &ctx.env, &db, now, UnknownToken::AsNone).await?;
     let slot = slot_of_code(&db, &ctx).await?;
     let (request, _): (ClaimRequest, _) = read_json(&mut req).await?;
     let member = MemberId::parse(&request.member_id)
@@ -284,7 +284,7 @@ pub(super) async fn add_name(mut req: Request, ctx: RouteContext<()>) -> ApiResu
     let db = database(&ctx.env)?;
     let now = now()?;
     rate_limit::check(&ctx.env, &req, Limit::Claim).await?;
-    let player = auth::optional_player(&req, &db, now, UnknownToken::AsNone).await?;
+    let player = auth::optional_player(&req, &ctx.env, &db, now, UnknownToken::AsNone).await?;
     let slot = slot_of_code(&db, &ctx).await?;
     let (request, _): (NameRequest, _) = read_json(&mut req).await?;
     let name = display_name(&request.name)?;

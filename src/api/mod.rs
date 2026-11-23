@@ -9,6 +9,7 @@
 //! `application/problem+json`.
 
 mod auth;
+pub(crate) mod cors;
 mod health;
 mod idempotency;
 mod join;
@@ -34,11 +35,12 @@ use crate::db;
 use crate::domain::civil::parse_date;
 use crate::domain::ids::SlotId;
 use crate::domain::slot::{Member, Slot};
+use cors::Cors;
 use problem::{ApiResult, PROBLEM_JSON, Problem, ProblemType};
 
-/// Prefixes a path with `/api/v1`, the only place the API version appears. Kancha web forwards
-/// `/api/*` unchanged, and a breaking change goes to `/api/v2/` while installed app versions
-/// keep calling `/api/v1/`.
+/// Prefixes a path with `/api/v1`, the only place the API version appears. A breaking change goes
+/// to `/api/v2/` while installed app versions keep calling `/api/v1/`; the token cookie's
+/// `Path=/api` and the CORS of `cors.rs` cover every version.
 macro_rules! v1 {
     ($path:literal) => {
         concat!("/api/v1", $path)
@@ -122,9 +124,10 @@ pub(crate) fn routes(router: Router<'_, ()>) -> Router<'_, ()> {
         })
 }
 
-/// What every `/api/*` response needs, after the router: no caching of private data, and a
-/// problem instead of the router's plain-text 404 and 405.
-pub(crate) fn finish(response: Response) -> worker::Result<Response> {
+/// What every `/api/*` response needs, after the router: no caching of private data, a problem
+/// instead of the router's plain-text 404 and 405, and the CORS headers, added last so that these
+/// problems carry them too.
+pub(crate) fn finish(response: Response, cors: &Cors) -> worker::Result<Response> {
     let status = response.status_code();
     let plain = !response
         .headers()
@@ -138,6 +141,7 @@ pub(crate) fn finish(response: Response) -> worker::Result<Response> {
     response
         .headers_mut()
         .set("Cache-Control", "private, no-store")?;
+    cors.apply(&mut response)?;
     Ok(response)
 }
 
@@ -169,7 +173,7 @@ async fn slot_caller(
     db: &D1Database,
     now: Timestamp,
 ) -> ApiResult<Caller> {
-    let player = auth::player(req, db, now).await?;
+    let player = auth::player(req, &ctx.env, db, now).await?;
     let slot_id = param(ctx, "id", SlotId::parse)?;
     let member = auth::member(db, &slot_id, &player).await?;
     let slot = db::slots::find(db, &slot_id)

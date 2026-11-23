@@ -12,7 +12,7 @@ You need `curl`, `jq` and `uuidgen`. Start the Worker on an empty local database
 
 ```bash
 make migrate-local       # create the tables in .wrangler/state
-make dev                 # wrangler dev → http://localhost:8787
+make dev                 # wrangler dev → http://localhost:8787, for pages on http://localhost:8081
 ```
 
 In another terminal:
@@ -32,11 +32,85 @@ Keep it: pik stores only its SHA-256 and cannot give it back.
 
 - **Scripts and the native app** send it in a header: `Authorization: Bearer <token>`.
 - **The website** gets it in the `__Secure-pik_token` cookie (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/api`), set
-  by the same responses. The browser sends it back by itself. A write with the cookie must come with
-  `Origin: https://kancha.pilotariak.com`, otherwise pik answers 403.
+  by the same responses. The browser sends it back by itself. A write with the cookie must come with an allowed
+  `Origin`, otherwise pik answers 403: see [Call pik from a web page](#call-pik-from-a-web-page).
 
 When a request has both, the `Authorization` header wins. Without a token, or with an unknown one, every route answers
 401, except `GET /health`, `GET /join/:code` and the routes that create a player.
+
+## Call pik from a web page
+
+The Kancha website calls pik on pik's own origin, with `fetch(url, { credentials: "include" })`, so the browser runs
+CORS. pik answers it for the origins of the `ALLOWED_ORIGINS` Worker variable, the same list that the `Origin` check of
+cookie writes uses:
+
+| Where                   | `ALLOWED_ORIGINS`               | Set by                                    |
+| ----------------------- | ------------------------------- | ----------------------------------------- |
+| Production              | `https://kancha.pilotariak.com` | `[vars]` of `wrangler.toml`               |
+| `make dev` (Expo `web`) | `http://localhost:8081`         | `--var` in the `dev` script, package.json |
+
+For an allowed origin, every `/api/` response, errors included, sends `Access-Control-Allow-Origin` (the origin, never
+`*`), `Access-Control-Allow-Credentials: true` and `Access-Control-Expose-Headers: Retry-After, ETag`. Every `/api/`
+response sends `Vary: Origin`. Check the preflight of a slot creation:
+
+```bash
+curl -si -X OPTIONS "$BASE/slots" \
+  -H "Origin: http://localhost:8081" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,idempotency-key"
+```
+
+The CORS part of the answer (the response also has `Cache-Control` and the security headers):
+
+```text
+HTTP/1.1 204 No Content
+access-control-allow-credentials: true
+access-control-allow-headers: Content-Type, Idempotency-Key, Authorization, If-Match
+access-control-allow-methods: GET, POST, PUT, PATCH, DELETE
+access-control-allow-origin: http://localhost:8081
+access-control-max-age: 7200
+vary: Origin
+```
+
+From another origin, or without `Origin`, `OPTIONS` gets `405 method-not-allowed` without any `Access-Control-*`
+header, and the browser blocks the call. `7200` seconds is the longest that Chromium keeps a preflight (`kMaxTimeout`
+in [`services/network/cors/preflight_result.cc`][chromium-preflight]).
+
+To test the website against pik in another environment, such as a preview deployment of the website, give that pik
+environment its own list: production allows only `https://kancha.pilotariak.com`. An origin on another registrable
+domain than `pilotariak.com` is cross-site, so the browser would not send the `SameSite=Lax` cookie to pik.
+
+### What the browser checks
+
+- **`Cross-Origin-Resource-Policy: same-origin`**, which pik sends on every response, does not block these calls.
+  [Main fetch][fetch-main] sets the response tainting of a `cors` request to `"cors"`, and only a `no-cors` request
+  gets `"opaque"`. [HTTP fetch][fetch-http] runs the [cross-origin resource policy check][fetch-corp] only "if either
+  request's response tainting or response's type is "opaque"". The header still keeps pages of other sites from
+  embedding pik's responses with `no-cors` requests.
+- **The `__Secure-pik_token` cookie over `http://localhost:8787`** is kept by Chrome and sent back, per the Chromium
+  source. RFC 6265bis ([draft 22][rfc6265bis], the latest revision, still an Internet-Draft in the RFC Editor queue)
+  lets the user agent decide what a "secure" connection is (section 5.7, steps 13 and 20), and notes that "most user
+  agents consider "https" to be a scheme that denotes a secure protocol and "localhost" to be trusted host" (section
+  5.8.3). In Chromium, `ProvisionalAccessScheme` returns `kTrustworthy` for a localhost URL
+  ([`net/cookies/cookie_util.cc`][chromium-cookie-util], line 710). The `__Secure-` prefix only fails on
+  `kNonCryptographic` (`HasValidSecurePrefixAttributes`, line 102). So do setting a `Secure` cookie and sending it
+  ([`net/cookies/cookie_base.cc`][chromium-cookie-base], `IsSetPermittedInContext` and `IncludeForRequestURL`).
+- **`SameSite=Lax`** lets the cookie go with the website's calls: a `Lax` cookie is sent with same-site requests
+  (RFC 6265bis, section 4.1.2.7; section 5.2 defines a same-site request), and a site is a scheme with a registrable
+  domain, or a host when there is none, without the port ([HTML, Sites][html-sites]). `http://localhost:8081` and `http://localhost:8787` are the same site, and so
+  are `https://kancha.pilotariak.com` and `https://pik.pilotariak.com`.
+
+These are source checks. Run Kancha's web build against `make dev` in Chrome to see them hold: the slot creation sets
+the cookie, the Créneaux tab lists the slot with it, and a second creation with the cookie gets no 403.
+
+[fetch-main]: https://fetch.spec.whatwg.org/#main-fetch
+[fetch-http]: https://fetch.spec.whatwg.org/#http-fetch
+[fetch-corp]: https://fetch.spec.whatwg.org/#cross-origin-resource-policy-check
+[rfc6265bis]: https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22
+[html-sites]: https://html.spec.whatwg.org/multipage/browsers.html#sites
+[chromium-cookie-util]: https://chromium.googlesource.com/chromium/src/+/90e288d38ea2af57f11a63054ecf57f327425eec/net/cookies/cookie_util.cc#710
+[chromium-cookie-base]: https://chromium.googlesource.com/chromium/src/+/90e288d38ea2af57f11a63054ecf57f327425eec/net/cookies/cookie_base.cc#314
+[chromium-preflight]: https://chromium.googlesource.com/chromium/src/+/90e288d38ea2af57f11a63054ecf57f327425eec/services/network/cors/preflight_result.cc#39
 
 ## Create a slot
 
@@ -323,7 +397,8 @@ Errors are `application/problem+json` (RFC 9457). Read `type`, which never chang
 Slot creation (5), name claims and additions through the invite code (10) and recovery redemptions (5) are limited per
 client address and per minute.
 
-Every API response sends `Cache-Control: private, no-store`: do not cache slot data.
+Every API response sends `Cache-Control: private, no-store`: do not cache slot data. Errors carry the CORS headers too,
+so a web page can read their `type` (see [Call pik from a web page](#call-pik-from-a-web-page)).
 
 ## Change the contract
 

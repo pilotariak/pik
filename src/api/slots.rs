@@ -326,7 +326,7 @@ pub(super) async fn create(mut req: Request, ctx: RouteContext<()>) -> ApiResult
     let db = database(&ctx.env)?;
     let now = now()?;
     rate_limit::check(&ctx.env, &req, Limit::CreateSlot).await?;
-    let caller = auth::optional_player(&req, &db, now, UnknownToken::Reject).await?;
+    let caller = auth::optional_player(&req, &ctx.env, &db, now, UnknownToken::Reject).await?;
     let (request, value): (CreateSlot, _) = read_json(&mut req).await?;
     let idempotent = idempotency::read(&req, caller.as_ref(), &value)?;
     if let Some(key) = &idempotent
@@ -452,7 +452,7 @@ pub(super) struct MySlots {
 pub(super) async fn me(req: Request, ctx: RouteContext<()>) -> ApiResult<Response> {
     let db = database(&ctx.env)?;
     let now = now()?;
-    let player = auth::player(&req, &db, now).await?;
+    let player = auth::player(&req, &ctx.env, &db, now).await?;
     let today = paris_date(now);
     let mut slots = Vec::new();
     for member in db::members::of_player(&db, &player).await? {

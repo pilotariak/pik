@@ -154,7 +154,7 @@ pub(super) async fn redeem(req: Request, ctx: RouteContext<()>) -> ApiResult<Res
     let db = database(&ctx.env)?;
     let now = now()?;
     rate_limit::check(&ctx.env, &req, Limit::Recover).await?;
-    let player = auth::optional_player(&req, &db, now, UnknownToken::Reject).await?;
+    let player = auth::optional_player(&req, &ctx.env, &db, now, UnknownToken::Reject).await?;
     let token = param(&ctx, "token", Token::parse)?;
     let hash = token.hash();
     let link = db::recoveries::find(&db, &hash)

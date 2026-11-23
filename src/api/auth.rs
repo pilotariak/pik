@@ -8,26 +8,25 @@
 //! (web), the header first. Only its SHA-256 is looked up, and it is never logged.
 
 use jiff::Timestamp;
-use worker::{D1Database, Method, Request, Response};
+use worker::{D1Database, Env, Method, Request, Response};
 
+use super::cors::AllowedOrigins;
 use super::problem::{ApiResult, Problem, ProblemType};
 use crate::db;
 use crate::domain::ids::{PlayerId, SlotId};
 use crate::domain::slot::Member;
 use crate::domain::token::Token;
 
-/// The token cookie. `__Secure-` makes browsers refuse it unless it is set over HTTPS with
-/// `Secure`; `Path=/api` covers every API version (ADR-0004).
+/// The token cookie, which pik sets on its own origin: the Kancha website calls pik there with
+/// credentialed CORS (ADR-0004, `cors.rs`). `__Secure-` makes browsers refuse it without `Secure`
+/// or from an origin that is not secure; Chrome counts `http://localhost` as secure, so `make dev`
+/// keeps it (docs/how-to/howto-api.md). `SameSite=Lax` still sends it on the website's calls:
+/// `kancha.pilotariak.com` and `pik.pilotariak.com` are the same site, and so are two ports of
+/// `localhost`. `Path=/api` covers every API version.
 pub(crate) const COOKIE: &str = "__Secure-pik_token";
 
 /// Browsers keep a cookie at most 400 days.
 const COOKIE_MAX_AGE: u32 = 400 * 24 * 3600;
-
-/// Origins whose pages may write with the cookie: the Kancha website, which forwards `/api/*`
-/// to pik (ADR-0004). The native app sends `Authorization`, which needs no `Origin` check.
-/// Preview deployments of the website are not listed: ADR-0004 gives them their own pik
-/// environment, still to be set up.
-pub(crate) const ALLOWED_ORIGINS: &[&str] = &["https://kancha.pilotariak.com"];
 
 /// Where the token came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,8 +49,10 @@ fn cookie_value(header: &str) -> Option<&str> {
     })
 }
 
-/// The token sent with the request, if any, after the `Origin` check of a cookie write.
-fn presented(req: &Request) -> ApiResult<Option<Presented>> {
+/// The token sent with the request, if any, after the `Origin` check of a cookie write: its
+/// `Origin` must be one of the `ALLOWED_ORIGINS` that CORS answers (`cors.rs`). The native app
+/// sends `Authorization`, which needs no `Origin` check.
+fn presented(req: &Request, env: &Env) -> ApiResult<Option<Presented>> {
     let headers = req.headers();
     if let Some(authorization) = headers.get("Authorization")? {
         let token = authorization
@@ -71,7 +72,7 @@ fn presented(req: &Request) -> ApiResult<Option<Presented>> {
     let write = !matches!(req.method(), Method::Get | Method::Head);
     if write {
         let origin = headers.get("Origin")?;
-        if !origin.is_some_and(|origin| ALLOWED_ORIGINS.contains(&origin.as_str())) {
+        if !origin.is_some_and(|origin| AllowedOrigins::from_env(env).allows(&origin)) {
             return Err(Problem::new(ProblemType::OriginNotAllowed));
         }
     }
@@ -91,8 +92,13 @@ fn unknown(source: Source) -> Problem {
 }
 
 /// The player of the request: 401 without a token or with an unknown one.
-pub(crate) async fn player(req: &Request, db: &D1Database, now: Timestamp) -> ApiResult<PlayerId> {
-    let Some(presented) = presented(req)? else {
+pub(crate) async fn player(
+    req: &Request,
+    env: &Env,
+    db: &D1Database,
+    now: Timestamp,
+) -> ApiResult<PlayerId> {
+    let Some(presented) = presented(req, env)? else {
         return Err(Problem::new(ProblemType::Unauthorized));
     };
     let Some(token) = presented.token else {
@@ -116,11 +122,12 @@ pub(crate) enum UnknownToken {
 /// The player of the request if it sent a token, `None` without one.
 pub(crate) async fn optional_player(
     req: &Request,
+    env: &Env,
     db: &D1Database,
     now: Timestamp,
     unknown_token: UnknownToken,
 ) -> ApiResult<Option<PlayerId>> {
-    let Some(presented) = presented(req)? else {
+    let Some(presented) = presented(req, env)? else {
         return Ok(None);
     };
     let found = match &presented.token {
