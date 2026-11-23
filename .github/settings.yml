@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+# These settings are synced to GitHub by https://probot.github.io/apps/settings/
+_extends: .github:.github/settings.yml
+
+repository:
+  name: pik
+  description: "TODO: one-line description of pik"
+  homepage: https://github.com/pilotariak/pik
+  topics: pilotariak, pik, rust
+  private: false
+
+# Labels: define labels for Issues and Pull Requests
+labels:
+## DEPENDENCY
+
+- name: "dependency/rust"
+  description: "Dependency Rust"
+  color: "6fcb70"
+
+branches:
+- name: main
+  protection:
+    required_pull_request_reviews:
+      required_approving_review_count: 1
+      dismiss_stale_reviews: true
+      require_code_owner_reviews: false
+    required_status_checks:
+      strict: true
+      contexts: []
+    enforce_admins: true
+    restrictions: null
+    required_linear_history: true
+    allow_force_pushes: false
+    allow_deletions: false
