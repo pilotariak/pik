@@ -43,7 +43,7 @@ pik/
 │   ├── health.test.mjs     # Worker tests, run with node:test
 │   ├── landing.test.mjs
 │   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
-├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
+├── wrangler.toml           # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
 ├── deny.toml               # cargo-deny: advisories, licenses, bans and sources of the crates
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
@@ -52,7 +52,7 @@ pik/
 ```
 
 `worker-build` compiles the crate to `wasm32-unknown-unknown` and writes `build/index.js` and `build/index_bg.wasm`.
-`wrangler dev` and `wrangler deploy` run it through the `build` command of `wrangler.jsonc`.
+`wrangler dev` and `wrangler deploy` run it through the `build` command of `wrangler.toml`.
 
 ## Module layout
 
@@ -192,7 +192,8 @@ make deploy          # make migrate-remote, then bun run deploy (wrangler deploy
 ```
 
 `wrangler deploy` attaches the Custom Domain `pik.pilotariak.com` declared in `routes`, then
-`https://pik.pilotariak.com/api/v1/health` answers.
+`https://pik.pilotariak.com/api/v1/health` answers. On the pilotariak.com zone, it creates the DNS record and the
+certificate. A Custom Domain takes a bare hostname, without a path or a wildcard.
 
 ## Platform features the next issues use
 
@@ -200,15 +201,15 @@ All are in workers-rs 0.9.0:
 
 - **D1**: the `d1` feature of the `worker` crate, `env.d1("DB")`, prepared statements with `bind` and `batch`.
 - **Cron Triggers**: a `#[event(scheduled)]` handler receives a `ScheduledEvent`, and `triggers.crons` goes in
-  `wrangler.jsonc`.
+  `wrangler.toml`.
 - **Rate Limiting binding**: `env.rate_limiter("NAME")?.limit(key)` returns `success`. The binding goes in `ratelimits`
-  in `wrangler.jsonc`.
+  in `wrangler.toml`.
 - **Cookies**: workers-rs has no cookie helper. Read the `Cookie` request header, and add each `Set-Cookie` with
   `headers.append`, never `set`, so that one cookie does not replace another.
 
 ## Key Conventions
 
-- Keep versions in step: the `worker` crate and `worker-build` (Cargo.toml, `wrangler.jsonc`, Makefile, CI); `wrangler`
+- Keep versions in step: the `worker` crate and `worker-build` (Cargo.toml, `wrangler.toml`, Makefile, CI); `wrangler`
   and `miniflare` at the versions wrangler bundles, both exact; `compatibility_date` no later than the workerd that
   wrangler bundles; `cargo-deny` (Makefile, CI).
 - Renovate (`.github/renovate.json5`) does most of it: one pull request for `worker` and every `worker-build` pin
@@ -223,5 +224,5 @@ All are in workers-rs 0.9.0:
   give every assertion a message.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) and carry a DCO `Signed-off-by`
   (`git commit -s`, see CONTRIBUTING.md).
-- License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC,
-  JSON5 and JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.
+- License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSON5
+  and JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.

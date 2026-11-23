@@ -9,8 +9,8 @@ import { readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 
 // Same compatibility date as the deployed Worker.
-const compatibilityDate = readFileSync("wrangler.jsonc", "utf8").match(
-  /"compatibility_date":\s*"([^"]+)"/,
+const compatibilityDate = readFileSync("wrangler.toml", "utf8").match(
+  /^compatibility_date\s*=\s*"([^"]+)"/m,
 )[1];
 
 export function startWorker() {
