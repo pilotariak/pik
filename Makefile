@@ -50,7 +50,7 @@ check-%:
 		echo -e "$(ERROR_COLOR)$(KO)$(NO_COLOR) $*"; \
 	fi
 
-# Renovate keeps these pins in step with Cargo.toml, wrangler.jsonc and the CI.
+# Renovate keeps these pins in step with Cargo.toml, wrangler.toml and the CI.
 WORKER_BUILD_VERSION = 0.9.0
 CARGO_DENY_VERSION = 0.22.0
 

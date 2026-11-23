@@ -9,12 +9,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
 import { experimental_readRawConfig as readRawConfig, unstable_splitSqlQuery as splitSqlQuery } from "wrangler";
 
-const { rawConfig } = readRawConfig({ config: "wrangler.jsonc" });
+const { rawConfig } = readRawConfig({ config: "wrangler.toml" });
 
 // Same compatibility date as the deployed Worker.
 const compatibilityDate = rawConfig.compatibility_date;
 
-// The rate limiters of wrangler.jsonc, with the same limits and periods.
+// The rate limiters of wrangler.toml, with the same limits and periods.
 const rateLimiters = Object.fromEntries(
   rawConfig.ratelimits.map(({ name, namespace_id: namespace, simple }) => [
     name,

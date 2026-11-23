@@ -26,12 +26,12 @@ database/
 └── migrations/
     ├── 0001_init.sql          ← empty: proves the migrations folder applies
     └── 0002_slots_schema.sql  ← slots, players, members, answers, guests, lineups…
-wrangler.jsonc                 ← D1 binding DB, migrations_dir = database/migrations
+wrangler.toml                  ← D1 binding DB, migrations_dir = database/migrations
 package.json                   ← migration and query scripts
 ```
 
-Unlike Frontis, `database/` has no `wrangler.toml` of its own: pik is a single Worker, and its `wrangler.jsonc` already
-binds the database.
+Unlike Frontis, `database/` has no `wrangler.toml` of its own: pik is a single Worker, and the root `wrangler.toml`
+already binds the database.
 
 ---
 

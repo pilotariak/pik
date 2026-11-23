@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Rate limits of slot creation, name claims and recovery redemptions, with the Workers Rate
-//! Limiting binding (`ratelimits` in wrangler.jsonc).
+//! Limiting binding (`[[ratelimits]]` in wrangler.toml).
 
 use worker::{Env, Request};
 
 use super::problem::{ApiResult, Problem};
 
-/// The period of every limit in wrangler.jsonc, in seconds: the binding allows 10 or 60. It
+/// The period of every limit in wrangler.toml, in seconds: the binding allows 10 or 60. It
 /// does not say when the window ends, so `Retry-After` is the whole period.
 const PERIOD_SECONDS: u32 = 60;
 
@@ -24,7 +24,7 @@ pub(crate) enum Limit {
 }
 
 impl Limit {
-    /// The binding name in wrangler.jsonc and tests/worker.mjs.
+    /// The binding name in wrangler.toml, which tests/worker.mjs reads too.
     fn binding(self) -> &'static str {
         match self {
             Self::CreateSlot => "CREATE_SLOT_LIMITER",
