@@ -1,0 +1,2841 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "pik",
+    "description": "Slots API of Kancha's Créneaux tab: courts that a group of friends books every week or every other week, and who comes to each session. Paths are under /api/v1. Errors are RFC 9457 problem details with a stable type. Dates in paths are local dates in Europe/Paris; instants in bodies are RFC 3339 in UTC. Every response sends Cache-Control: private, no-store.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "version": "1"
+  },
+  "servers": [
+    {
+      "url": "https://pik.pilotariak.com"
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Answers `{\"status\":\"ok\"}`. Needs no token.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "pik is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/join/{code}": {
+      "get": {
+        "tags": [
+          "join"
+        ],
+        "summary": "Preview a slot from its invite code, with the names nobody holds yet. Needs no token.",
+        "operationId": "previewJoin",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Invite code: eight characters without 0, O, 1 or I, in any case",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The slot and its free names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinPreview"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/join/{code}/claim": {
+      "post": {
+        "tags": [
+          "join"
+        ],
+        "summary": "\"C'est moi\": claim a free name. Returns a player token if the device has none.",
+        "operationId": "claimName",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Invite code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The name is the device's",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The new player token, when one was issued"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Joined"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/join/{code}/members": {
+      "post": {
+        "tags": [
+          "join"
+        ],
+        "summary": "\"Not in the list\": add the device's name to the slot, unless the list is closed. Returns a\nplayer token if the device has none.",
+        "operationId": "joinWithName",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Invite code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The device's new member",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The new player token, when one was issued"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Joined"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "The player's slots, one card summary each: the Créneaux tab.",
+        "operationId": "getMySlots",
+        "responses": {
+          "200": {
+            "description": "The player's slots, oldest membership first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MySlots"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/recover/{token}": {
+      "post": {
+        "tags": [
+          "recovery"
+        ],
+        "summary": "Redeem a recovery link: the member is linked to the device's player, or to a new player whose\ntoken is returned, and keeps their answers. Works once, for 24 hours.",
+        "operationId": "redeemRecoveryLink",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token of the recovery link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The member is the device's",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The new player token, when one was issued"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Joined"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots": {
+      "post": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "Create a slot. The creator becomes its first organizer, and a device without a token gets a\nplayer token. Accepts `Idempotency-Key`.",
+        "operationId": "createSlot",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID v4 drawn by the client: a retry with the same key returns the first slot",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSlot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Slot created, or the slot of a replayed key with a fresh token",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The new player token, when one was issued"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}": {
+      "get": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "A slot with its members and upcoming sessions and their states.",
+        "operationId": "getSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The slot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "Delete the slot and all its data (organizer).",
+        "operationId": "deleteSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Slot deleted, with its members, answers, guests, lineups and recovery links"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "Change the name, venue, times, minimum, places, target or deadline rule (organizer).",
+        "operationId": "updateSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The slot after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/invite-code": {
+      "post": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "Rotate the invite code (organizer). Members who already joined keep calling with the slot id\nand their token: only the old link stops working.",
+        "operationId": "rotateInviteCode",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new invite code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCodeView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/list": {
+      "put": {
+        "tags": [
+          "slots"
+        ],
+        "summary": "Close or reopen the list of names (organizer).",
+        "operationId": "setList",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListState"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The list state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/members": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Add a name to the list (organizer). Nobody holds it until a player claims it.",
+        "operationId": "addMember",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/members/me": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Leave the slot. The member's row stays as \"Ancien joueur\" with its past answers and sessions\nplayed; their answers from today on are deleted. The last organizer cannot leave.",
+        "operationId": "leaveSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Left the slot"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/members/{member}": {
+      "patch": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Change a member's role or display name (organizer). The last organizer of a slot cannot lose\nthe role.",
+        "operationId": "updateMember",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "in": "path",
+            "description": "Member id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The member after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/members/{member}/claim": {
+      "delete": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Release a claimed name (organizer): the device no longer holds it, the member keeps their\nname and answers, and the name can be claimed again. The last organizer's name cannot be\nreleased.",
+        "operationId": "releaseName",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "in": "path",
+            "description": "Member id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The name is free"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/members/{member}/recovery": {
+      "post": {
+        "tags": [
+          "recovery"
+        ],
+        "summary": "Create a recovery link for a member (organizer). Accepts `Idempotency-Key`.",
+        "operationId": "createRecoveryLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "member",
+            "in": "path",
+            "description": "Member id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A UUID v4 drawn by the client: a retry with the same key returns the first link with a fresh token",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The link, valid 24 hours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryLink"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/sessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "The sessions of a slot in a date range, with their states.",
+        "operationId": "listSessions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First date, `YYYY-MM-DD` in Europe/Paris. Default: today in Paris.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last date, included. Default: the end of the season, or 366 days after `from` if sooner.\nAt most 366 days after `from`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions in the range, by date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/sessions/{date}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "One session: answers by status, guests, sessions played, call order and lineup. Its `ETag`\nis the lineup version, for `If-Match` on `PUT …/lineup`.",
+        "operationId": "getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Session date, YYYY-MM-DD in Europe/Paris",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Lineup version, \"0\" without a lineup"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Cancel or uncancel one date, or change its note, minimum, places or deadline (organizer).",
+        "operationId": "updateSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Session date, YYYY-MM-DD in Europe/Paris",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionChanges"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The session after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/sessions/{date}/answer": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "The caller's answer, or a member's answer (organizer). Last write wins. After the deadline,\nonly `ko` is accepted.",
+        "operationId": "putAnswer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Session date, YYYY-MM-DD in Europe/Paris",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answer, with the recomputed counts and state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/sessions/{date}/guests": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Replaces the guests of one session (organizer). A guest whose name is kept keeps their id and\nlineup place, so sending the same list again changes nothing. Removing a guest who is in the\nlineup removes them from it and moves its `ETag`.",
+        "operationId": "putGuests",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Session date, YYYY-MM-DD in Europe/Paris",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The guests, in the order sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/slots/{id}/sessions/{date}/lineup": {
+      "put": {
+        "tags": [
+          "lineups"
+        ],
+        "summary": "Selection and pairs of one session (organizer). Needs `If-Match` with the `ETag` of\n`GET …/sessions/:date`. A player plays in one game of a session at most.",
+        "operationId": "putLineup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "description": "Session date, YYYY-MM-DD in Europe/Paris",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The ETag of GET …/sessions/:date",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LineupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The new lineup",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The new lineup version"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineupView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerRequest": {
+        "type": "object",
+        "description": "`PUT …/answer`.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "member_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Another member, for an organizer who answers for them. Default: the caller."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnswerStatus"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnswerResult": {
+        "type": "object",
+        "description": "An answer written, with the recomputed session.",
+        "required": [
+          "member_id",
+          "status",
+          "session"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionSummary"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnswerStatus"
+          }
+        }
+      },
+      "AnswerStatus": {
+        "type": "string",
+        "description": "A player's answer.",
+        "enum": [
+          "ok",
+          "dispo",
+          "ko"
+        ]
+      },
+      "AnswerView": {
+        "type": "object",
+        "description": "An answer of a session.",
+        "required": [
+          "member_id",
+          "status",
+          "answered_at",
+          "played",
+          "me"
+        ],
+        "properties": {
+          "answered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "me": {
+            "type": "boolean",
+            "description": "The caller's own answer."
+          },
+          "member_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`null`: a member who left, shown as \"Ancien joueur\"."
+          },
+          "played": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Sessions played this season.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnswerStatus"
+          }
+        }
+      },
+      "ClaimRequest": {
+        "type": "object",
+        "description": "`POST /join/:code/claim`.",
+        "required": [
+          "member_id"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string",
+            "description": "A free name of the preview."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Counts": {
+        "type": "object",
+        "description": "Answers of a session by status. `none`: active members who did not answer.",
+        "required": [
+          "ok",
+          "dispo",
+          "ko",
+          "none"
+        ],
+        "properties": {
+          "dispo": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "ko": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "none": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "ok": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Court": {
+        "type": "string",
+        "description": "`slots.court`.",
+        "enum": [
+          "trinquet",
+          "mur_a_gauche",
+          "place_libre"
+        ]
+      },
+      "CreateSlot": {
+        "type": "object",
+        "description": "`POST /slots`.",
+        "required": [
+          "name",
+          "venue",
+          "court",
+          "specialty",
+          "anchor_date",
+          "interval_weeks",
+          "time_from",
+          "season_start",
+          "season_end",
+          "organizer_name"
+        ],
+        "properties": {
+          "anchor_date": {
+            "type": "string",
+            "format": "date",
+            "description": "The first session, `YYYY-MM-DD`: it gives the weekday, fixed for the season."
+          },
+          "court": {
+            "$ref": "#/components/schemas/Court"
+          },
+          "deadline_days_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "0 to 6. Default 1."
+          },
+          "deadline_time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`HH:MM`. Default 20:00."
+          },
+          "interval_weeks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1 or 2, fixed for the season."
+          },
+          "min_players": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Default 4.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "organizer_name": {
+            "type": "string",
+            "description": "The creator's name in the slot: they become its first organizer."
+          },
+          "places": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Default: 4, or `min_players` if larger.",
+            "minimum": 0
+          },
+          "season_end": {
+            "type": "string",
+            "format": "date"
+          },
+          "season_start": {
+            "type": "string",
+            "format": "date"
+          },
+          "specialty": {
+            "type": "string",
+            "description": "`gomme_creuse`, `gomme_pleine`… or a Frontis specialty id: a-z, 0-9, _ and -."
+          },
+          "target": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "30, 35 or 40. Default 40.",
+            "minimum": 0
+          },
+          "time_from": {
+            "type": "string",
+            "description": "`HH:MM`, Paris time."
+          },
+          "time_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "venue": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeadlineRuleView": {
+        "type": "object",
+        "description": "Until when players answer: `days_before` days before a session, at `time`, Paris time.",
+        "required": [
+          "days_before",
+          "time"
+        ],
+        "properties": {
+          "days_before": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "time": {
+            "type": "string",
+            "example": "20:00"
+          }
+        }
+      },
+      "FreeName": {
+        "type": "object",
+        "description": "A name nobody holds yet.",
+        "required": [
+          "member_id",
+          "name"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "GameView": {
+        "type": "object",
+        "description": "One game: two teams of exactly two players.",
+        "required": [
+          "game",
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatView"
+            }
+          },
+          "b": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatView"
+            }
+          },
+          "game": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Game number, from 1."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GuestList": {
+        "type": "object",
+        "description": "The guests of a session.",
+        "required": [
+          "guests"
+        ],
+        "properties": {
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuestView"
+            }
+          }
+        }
+      },
+      "GuestName": {
+        "type": "object",
+        "description": "A guest to keep or add, by name.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GuestView": {
+        "type": "object",
+        "description": "A guest of a session.",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "GuestsRequest": {
+        "type": "object",
+        "description": "`PUT …/guests`: the whole list of guests of a session.",
+        "required": [
+          "guests"
+        ],
+        "properties": {
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GuestName"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "description": "Liveness of pik.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      },
+      "InviteCodeView": {
+        "type": "object",
+        "description": "The invite code of a slot.",
+        "required": [
+          "invite_code"
+        ],
+        "properties": {
+          "invite_code": {
+            "type": "string"
+          }
+        }
+      },
+      "JoinPreview": {
+        "type": "object",
+        "description": "What a player sees before joining.",
+        "required": [
+          "name",
+          "venue",
+          "court",
+          "specialty",
+          "weekday",
+          "time_from",
+          "interval_weeks",
+          "list_closed",
+          "free_names"
+        ],
+        "properties": {
+          "court": {
+            "$ref": "#/components/schemas/Court"
+          },
+          "free_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreeName"
+            }
+          },
+          "interval_weeks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "list_closed": {
+            "type": "boolean",
+            "description": "A closed list takes no new name: only the free names can be claimed."
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_session": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The next session from today in Paris, `null` once the season is over."
+          },
+          "specialty": {
+            "type": "string"
+          },
+          "time_from": {
+            "type": "string"
+          },
+          "venue": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "integer",
+            "format": "int32",
+            "description": "ISO weekday: 1 for Monday to 7 for Sunday."
+          }
+        }
+      },
+      "Joined": {
+        "type": "object",
+        "description": "A slot joined: the member of the device, and its token when one was issued.",
+        "required": [
+          "slot_id",
+          "member_id"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string"
+          },
+          "player_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A new player token when the device had none, or an unknown one; also set in the cookie.\n`null` when the device already had a player."
+          },
+          "slot_id": {
+            "type": "string"
+          }
+        }
+      },
+      "LineupRequest": {
+        "type": "object",
+        "description": "`PUT …/lineup`.",
+        "required": [
+          "selection",
+          "games"
+        ],
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameView"
+            }
+          },
+          "selection": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatView"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "LineupView": {
+        "type": "object",
+        "description": "The lineup of a session. A session without a lineup has version 0 and empty lists.",
+        "required": [
+          "version",
+          "selection",
+          "games"
+        ],
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameView"
+            }
+          },
+          "selection": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatView"
+            },
+            "description": "Selected players, in order. A selected player outside every game waits for the next one."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ListState": {
+        "type": "object",
+        "description": "`PUT /slots/:id/list`.",
+        "required": [
+          "closed"
+        ],
+        "properties": {
+          "closed": {
+            "type": "boolean",
+            "description": "A closed list takes no new name through the invite link. Free names can still be claimed."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MeInSlot": {
+        "type": "object",
+        "description": "The caller's member in a slot.",
+        "required": [
+          "member_id",
+          "role"
+        ],
+        "properties": {
+          "member_id": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "MemberChanges": {
+        "type": "object",
+        "description": "`PATCH /slots/:id/members/:member`: absent fields keep their value.",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Fixes a misspelled name."
+          },
+          "role": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MemberView": {
+        "type": "object",
+        "description": "A member of a slot.",
+        "required": [
+          "id",
+          "role",
+          "claimed"
+        ],
+        "properties": {
+          "claimed": {
+            "type": "boolean",
+            "description": "Whether a device holds this name. A free name can be claimed through the invite link."
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "MySlots": {
+        "type": "object",
+        "description": "`GET /me`.",
+        "required": [
+          "slots"
+        ],
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlotCard"
+            }
+          }
+        }
+      },
+      "NameRequest": {
+        "type": "object",
+        "description": "`POST /slots/:id/members`.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "First name or nickname: 1 to 40 characters, unique in the slot whatever its case."
+          }
+        },
+        "additionalProperties": false
+      },
+      "NoAnswerView": {
+        "type": "object",
+        "description": "An active member who did not answer.",
+        "required": [
+          "member_id",
+          "played",
+          "me"
+        ],
+        "properties": {
+          "me": {
+            "type": "boolean"
+          },
+          "member_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "played": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "ProblemDocument": {
+        "type": "object",
+        "description": "The body of an error response.",
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProblemType"
+          }
+        }
+      },
+      "ProblemType": {
+        "type": "string",
+        "description": "The `type` of a problem: one per error, stable across versions.",
+        "enum": [
+          "Unauthorized",
+          "OriginNotAllowed",
+          "OrganizerOnly",
+          "NotFound",
+          "MethodNotAllowed",
+          "NameTaken",
+          "ListClosed",
+          "SessionCancelled",
+          "DeadlinePassed",
+          "LastOrganizer",
+          "AlreadyMember",
+          "RecoveryLinkGone",
+          "LineupChanged",
+          "IfMatchRequired",
+          "InvalidRequest",
+          "NotASession",
+          "IdempotencyKeyReused",
+          "RateLimited",
+          "Internal"
+        ]
+      },
+      "RecoveryLink": {
+        "type": "object",
+        "description": "A recovery link, to send privately to the member.",
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string",
+            "description": "The token of `POST /recover/{token}`. Shown once: pik keeps only its hash."
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "description": "`members.role`.",
+        "enum": [
+          "organizer",
+          "player"
+        ]
+      },
+      "Schedule": {
+        "type": "object",
+        "description": "When a slot meets.",
+        "required": [
+          "weekday",
+          "time_from",
+          "interval_weeks"
+        ],
+        "properties": {
+          "interval_weeks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1: every week, 2: every other week."
+          },
+          "time_from": {
+            "type": "string",
+            "example": "18:00"
+          },
+          "time_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weekday": {
+            "type": "integer",
+            "format": "int32",
+            "description": "ISO weekday of every session: 1 for Monday to 7 for Sunday."
+          }
+        }
+      },
+      "SeatView": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "member"
+            ],
+            "properties": {
+              "member": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "guest"
+            ],
+            "properties": {
+              "guest": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "A player of a lineup: `{\"member\": \"m_…\"}` or `{\"guest\": \"g_…\"}`."
+      },
+      "SessionChanges": {
+        "type": "object",
+        "description": "`PATCH /slots/:id/sessions/:date`: absent fields keep their value, `null` goes back to the\nslot's value.",
+        "properties": {
+          "cancelled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Cancel the date, or undo its cancellation."
+          },
+          "deadline_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Answer deadline of this date, RFC 3339."
+          },
+          "min_players": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "maximum": 30,
+            "minimum": 1
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "places": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "maximum": 30,
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SessionSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "answers",
+              "no_answer",
+              "guests",
+              "call_order",
+              "lineup"
+            ],
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AnswerView"
+                },
+                "description": "Answers: OK by answer time, then Dispo, then KO."
+              },
+              "call_order": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Member ids in the order they are called: the first `places` take the places."
+              },
+              "guests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GuestView"
+                }
+              },
+              "lineup": {
+                "$ref": "#/components/schemas/LineupView"
+              },
+              "no_answer": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NoAnswerView"
+                }
+              }
+            }
+          }
+        ],
+        "description": "One session for the Séance and Composer screens."
+      },
+      "SessionList": {
+        "type": "object",
+        "description": "Sessions of a date range.",
+        "required": [
+          "sessions"
+        ],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSummary"
+            }
+          }
+        }
+      },
+      "SessionState": {
+        "type": "string",
+        "description": "State of a session, computed on every read.",
+        "enum": [
+          "on",
+          "missing",
+          "to_complete",
+          "cancelled_short",
+          "cancelled"
+        ]
+      },
+      "SessionSummary": {
+        "type": "object",
+        "description": "One session: its effective values, state and counts.",
+        "required": [
+          "date",
+          "starts_at",
+          "deadline",
+          "deadline_passed",
+          "state",
+          "missing",
+          "min_players",
+          "places",
+          "cancelled",
+          "counts"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Local date in Europe/Paris.",
+            "example": "2026-11-25"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Answer deadline, RFC 3339 in UTC."
+          },
+          "deadline_passed": {
+            "type": "boolean"
+          },
+          "min_players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "missing": {
+            "type": "integer",
+            "format": "int32",
+            "description": "OK answers still needed: non-zero only when `state` is `missing`.",
+            "minimum": 0
+          },
+          "my_answer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AnswerStatus",
+                "description": "The caller's answer, if any."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "places": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it starts, RFC 3339 in UTC."
+          },
+          "state": {
+            "$ref": "#/components/schemas/SessionState"
+          }
+        }
+      },
+      "SlotCard": {
+        "type": "object",
+        "description": "A slot of the player, on the Créneaux tab.",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "member_id",
+          "venue",
+          "court",
+          "specialty",
+          "schedule"
+        ],
+        "properties": {
+          "court": {
+            "$ref": "#/components/schemas/Court"
+          },
+          "id": {
+            "type": "string"
+          },
+          "member_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_session": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionSummary",
+                "description": "The next session from today in Paris, `null` once the season is over."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "specialty": {
+            "type": "string"
+          },
+          "venue": {
+            "type": "string"
+          }
+        }
+      },
+      "SlotChanges": {
+        "type": "object",
+        "description": "`PATCH /slots/:id`: absent fields keep their value. Weekday and frequency are fixed for the\nseason: `interval_weeks` or `anchor_date` answers 422.",
+        "properties": {
+          "deadline_days_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "deadline_time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "min_players": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "places": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "target": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "time_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`null` removes the end time."
+          },
+          "venue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SlotCreated": {
+        "type": "object",
+        "description": "A slot created, or the one a replayed `Idempotency-Key` created.",
+        "required": [
+          "slot_id",
+          "invite_code",
+          "member_id"
+        ],
+        "properties": {
+          "invite_code": {
+            "type": "string"
+          },
+          "member_id": {
+            "type": "string",
+            "description": "The creator's member, an organizer."
+          },
+          "player_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A new player token when the request came without one; also set in the cookie. `null`\nwhen the device already had a player."
+          },
+          "slot_id": {
+            "type": "string"
+          }
+        }
+      },
+      "SlotDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SlotView"
+          },
+          {
+            "type": "object",
+            "required": [
+              "me",
+              "members",
+              "upcoming_sessions"
+            ],
+            "properties": {
+              "me": {
+                "$ref": "#/components/schemas/MeInSlot"
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MemberView"
+                },
+                "description": "Active members, in the order they were added."
+              },
+              "upcoming_sessions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SessionSummary"
+                }
+              }
+            }
+          }
+        ],
+        "description": "`GET /slots/:id`."
+      },
+      "SlotView": {
+        "type": "object",
+        "description": "The settings of a slot.",
+        "required": [
+          "id",
+          "name",
+          "venue",
+          "court",
+          "specialty",
+          "schedule",
+          "anchor_date",
+          "season_start",
+          "season_end",
+          "min_players",
+          "places",
+          "target",
+          "deadline_rule",
+          "invite_code",
+          "list_closed"
+        ],
+        "properties": {
+          "anchor_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "court": {
+            "$ref": "#/components/schemas/Court"
+          },
+          "deadline_rule": {
+            "$ref": "#/components/schemas/DeadlineRuleView"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invite_code": {
+            "type": "string",
+            "description": "Eight characters without 0, O, 1 or I, only used to join."
+          },
+          "list_closed": {
+            "type": "boolean"
+          },
+          "min_players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "places": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "season_end": {
+            "type": "string",
+            "format": "date"
+          },
+          "season_start": {
+            "type": "string",
+            "format": "date"
+          },
+          "specialty": {
+            "type": "string"
+          },
+          "target": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Points of a game: 30, 35 or 40.",
+            "minimum": 0
+          },
+          "venue": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responses": {
+      "Conflict": {
+        "description": "Name taken, list closed, session cancelled, deadline passed, last organizer, or device\nalready a member.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The caller is not an organizer of the slot, or wrote with the cookie from an origin that\nis not Kancha's.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "Gone": {
+        "description": "The recovery link was used or has expired.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not found, or the caller is not a member of the slot: a 403 would tell that it exists.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "`If-Match` does not match the current lineup version.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "PreconditionRequired": {
+        "description": "`If-Match` is missing.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit reached.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Seconds to wait before retrying"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "No token, or an unknown token.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "Invalid body, parameter or header, a date that is not a session of the slot, or an\n`Idempotency-Key` reused with another request.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDocument"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Player token, for the native app"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Secure-pik_token",
+        "description": "Player token in an HttpOnly cookie set by pik, for the website. A write with the cookie must come with an allowed Origin."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness"
+    },
+    {
+      "name": "slots",
+      "description": "Create, read, change and delete slots; the player's slots"
+    },
+    {
+      "name": "join",
+      "description": "Join a slot with its invite code"
+    },
+    {
+      "name": "members",
+      "description": "The list of names of a slot"
+    },
+    {
+      "name": "sessions",
+      "description": "Sessions, answers and guests"
+    },
+    {
+      "name": "lineups",
+      "description": "Selection and pairs of a session"
+    },
+    {
+      "name": "recovery",
+      "description": "Recovery links for a member who lost their device"
+    }
+  ]
+}

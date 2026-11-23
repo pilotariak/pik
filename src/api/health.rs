@@ -6,12 +6,23 @@
 use serde::Serialize;
 use worker::{Response, Result};
 
+/// Liveness of pik.
 #[derive(Serialize)]
-struct Health {
+#[cfg_attr(test, derive(utoipa::ToSchema))]
+pub(super) struct Health {
+    #[cfg_attr(test, schema(example = "ok"))]
     status: &'static str,
 }
 
-/// Answers `{"status":"ok"}`.
+/// Answers `{"status":"ok"}`. Needs no token.
+#[cfg_attr(test, utoipa::path(
+    get,
+    path = "/api/v1/health",
+    operation_id = "getHealth",
+    tag = "health",
+    security(()),
+    responses((status = 200, description = "pik is up", body = Health))
+))]
 pub(super) fn get() -> Result<Response> {
     Response::from_json(&Health { status: "ok" })
 }

@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+# clippy::doc_markdown: names that doc comments write without backticks. ".." keeps clippy's
+# default list.
+doc-valid-idents = ["OpenAPI", ".."]
