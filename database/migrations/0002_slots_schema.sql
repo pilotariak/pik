@@ -9,9 +9,9 @@
 -- are YYYY-MM-DD and local times HH:MM, in Europe/Paris. Instants are INTEGER milliseconds
 -- since the epoch, UTC.
 --
--- Sessions are not stored: their dates follow from the slot's recurrence (src/calendar/), and
--- only per-date overrides are. D1 enforces foreign keys, so deleting a slot deletes every row
--- attached to it.
+-- Sessions are not stored: their dates follow from the slot's recurrence
+-- (src/domain/calendar/), and only per-date overrides are. D1 enforces foreign keys, so deleting
+-- a slot deletes every row attached to it.
 
 CREATE TABLE slots (
   id                   TEXT PRIMARY KEY,

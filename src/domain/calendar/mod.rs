@@ -13,10 +13,10 @@
 //! host. Callers pass `now`. Local dates and times are in Europe/Paris, and instants are UTC
 //! [`Timestamp`]s, stored in D1 as milliseconds since the epoch.
 
-pub mod call_order;
-pub mod deadline;
-pub mod recurrence;
-pub mod session;
+pub(crate) mod call_order;
+pub(crate) mod deadline;
+pub(crate) mod recurrence;
+pub(crate) mod session;
 
 use std::fmt;
 
@@ -28,7 +28,7 @@ use jiff::tz::{self, TimeZone};
 ///
 /// A Worker has no system tz database, so `tz::get!` embeds the Europe/Paris rules from
 /// jiff-tzdb at compile time: a tzdata update needs a rebuild.
-pub static PARIS: TimeZone = tz::get!("Europe/Paris");
+pub(crate) static PARIS: TimeZone = tz::get!("Europe/Paris");
 
 /// The instant of a local date and time in Paris.
 ///
@@ -36,20 +36,20 @@ pub static PARIS: TimeZone = tz::get!("Europe/Paris");
 /// in force before the change, so it lands at 03:30 summer time. A time repeated when the clocks
 /// go back (02:30 on the last Sunday of October) also takes the offset in force before the
 /// change: its first occurrence, in summer time. This is jiff's `compatible` disambiguation.
-pub fn paris_instant(date: Date, time: Time) -> Result<Timestamp, CalendarError> {
+pub(crate) fn paris_instant(date: Date, time: Time) -> Result<Timestamp, CalendarError> {
     PARIS
         .to_timestamp(date.to_datetime(time))
         .map_err(|_| CalendarError::OutOfRange)
 }
 
 /// The local date in Paris at an instant.
-pub fn paris_date(at: Timestamp) -> Date {
+pub(crate) fn paris_date(at: Timestamp) -> Date {
     PARIS.to_datetime(at).date()
 }
 
 /// A slot or a session whose values the calendar cannot use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CalendarError {
+pub(crate) enum CalendarError {
     /// `interval_weeks` is neither 1 nor 2.
     InvalidInterval(i64),
     /// `anchor_date` is outside `season_start..=season_end`.
@@ -94,9 +94,10 @@ impl std::error::Error for CalendarError {}
 
 #[cfg(test)]
 mod tests {
+    use jiff::Timestamp;
     use jiff::civil::{date, time};
 
-    use super::*;
+    use super::{PARIS, paris_date, paris_instant};
 
     fn utc(s: &str) -> Timestamp {
         s.parse().unwrap()
@@ -109,52 +110,59 @@ mod tests {
         let mut changes = PARIS.following(utc("2027-01-01T00:00:00Z"));
         let spring = changes.next().unwrap();
         let autumn = changes.next().unwrap();
-        assert_eq!(spring.timestamp(), utc("2027-03-28T01:00:00Z"));
-        assert_eq!(spring.offset().seconds(), 2 * 3600);
-        assert_eq!(autumn.timestamp(), utc("2027-10-31T01:00:00Z"));
-        assert_eq!(autumn.offset().seconds(), 3600);
+        assert_eq!(
+            spring.timestamp(),
+            utc("2027-03-28T01:00:00Z"),
+            "summer time starts on the last Sunday of March at 01:00 UTC"
+        );
+        assert_eq!(spring.offset().seconds(), 2 * 3600, "summer time is UTC+2");
+        assert_eq!(
+            autumn.timestamp(),
+            utc("2027-10-31T01:00:00Z"),
+            "summer time ends on the last Sunday of October at 01:00 UTC"
+        );
+        assert_eq!(autumn.offset().seconds(), 3600, "winter time is UTC+1");
     }
 
     #[test]
     fn instant_of_a_local_time_follows_the_offset_of_the_day() {
-        let at = |d, t| paris_instant(d, t).unwrap();
-        assert_eq!(
-            at(date(2027, 3, 27), time(20, 0, 0, 0)),
-            utc("2027-03-27T19:00:00Z")
-        );
-        assert_eq!(
-            at(date(2027, 3, 28), time(20, 0, 0, 0)),
-            utc("2027-03-28T18:00:00Z")
-        );
-        assert_eq!(
-            at(date(2027, 10, 30), time(20, 0, 0, 0)),
-            utc("2027-10-30T18:00:00Z")
-        );
-        assert_eq!(
-            at(date(2027, 10, 31), time(20, 0, 0, 0)),
-            utc("2027-10-31T19:00:00Z")
-        );
+        for (day, expected) in [
+            (date(2027, 3, 27), "2027-03-27T19:00:00Z"),
+            (date(2027, 3, 28), "2027-03-28T18:00:00Z"),
+            (date(2027, 10, 30), "2027-10-30T18:00:00Z"),
+            (date(2027, 10, 31), "2027-10-31T19:00:00Z"),
+        ] {
+            assert_eq!(
+                paris_instant(day, time(20, 0, 0, 0)).unwrap(),
+                utc(expected),
+                "20:00 on {day} in Paris"
+            );
+        }
     }
 
     #[test]
     fn skipped_local_time_moves_forward_and_repeated_one_takes_summer_time() {
-        // 02:30 does not exist on 28 March 2027: 03:30 summer time.
         assert_eq!(
             paris_instant(date(2027, 3, 28), time(2, 30, 0, 0)).unwrap(),
-            utc("2027-03-28T01:30:00Z")
+            utc("2027-03-28T01:30:00Z"),
+            "02:30 does not exist on 28 March 2027: 03:30 summer time"
         );
-        // 02:30 happens twice on 31 October 2027: the first one, in summer time.
         assert_eq!(
             paris_instant(date(2027, 10, 31), time(2, 30, 0, 0)).unwrap(),
-            utc("2027-10-31T00:30:00Z")
+            utc("2027-10-31T00:30:00Z"),
+            "02:30 happens twice on 31 October 2027: the first one, in summer time"
         );
     }
 
     #[test]
     fn local_date_changes_at_midnight_paris_time() {
         // Midnight in Paris is 23:00 UTC in winter and 22:00 UTC in summer.
-        assert_eq!(paris_date(utc("2027-01-14T23:30:00Z")), date(2027, 1, 15));
-        assert_eq!(paris_date(utc("2027-07-14T22:30:00Z")), date(2027, 7, 15));
-        assert_eq!(paris_date(utc("2027-07-14T21:59:59Z")), date(2027, 7, 14));
+        for (at, expected) in [
+            ("2027-01-14T23:30:00Z", date(2027, 1, 15)),
+            ("2027-07-14T22:30:00Z", date(2027, 7, 15)),
+            ("2027-07-14T21:59:59Z", date(2027, 7, 14)),
+        ] {
+            assert_eq!(paris_date(utc(at)), expected, "Paris date at {at}");
+        }
     }
 }

@@ -12,11 +12,11 @@ use super::session::Status;
 
 /// One answer of a session: an `answers` row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Answer<'a> {
-    pub member_id: &'a str,
-    pub status: Status,
+pub(crate) struct Answer<'a> {
+    pub(crate) member_id: &'a str,
+    pub(crate) status: Status,
     /// Changes only when the status changes.
-    pub answered_at: Timestamp,
+    pub(crate) answered_at: Timestamp,
 }
 
 /// Members of a session in the order they are called. The first `places` take the places.
@@ -25,7 +25,7 @@ pub struct Answer<'a> {
 /// member with the fewest sessions played this season first (`played`, from
 /// [`sessions_played`]), then the earliest answer. The member id breaks the last ties, so the
 /// order never depends on the order of the rows. KO answers are left out.
-pub fn call_order<'a>(answers: &[Answer<'a>], played: &HashMap<&str, u32>) -> Vec<&'a str> {
+pub(crate) fn call_order<'a>(answers: &[Answer<'a>], played: &HashMap<&str, u32>) -> Vec<&'a str> {
     let mut called: Vec<&Answer<'a>> = answers
         .iter()
         .filter(|answer| answer.status != Status::Ko)
@@ -44,12 +44,12 @@ pub fn call_order<'a>(answers: &[Answer<'a>], played: &HashMap<&str, u32>) -> Ve
 
 /// A `lineup_entries` row, reduced to what counts for sessions played.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LineupEntry<'a> {
-    pub date: Date,
+pub(crate) struct LineupEntry<'a> {
+    pub(crate) date: Date,
     /// `None` for a guest.
-    pub member_id: Option<&'a str>,
+    pub(crate) member_id: Option<&'a str>,
     /// `None`: selected, waits for the next game. That member still counts as having played.
-    pub game: Option<i64>,
+    pub(crate) game: Option<i64>,
 }
 
 /// Sessions played this season by each member: the number of distinct dates of their lineup
@@ -58,7 +58,7 @@ pub struct LineupEntry<'a> {
 /// `today` is the Paris date of now ([`paris_date`](super::paris_date)): a session counts from
 /// the day after it. A slot covers one season, so there is no season filter. A member who has
 /// not played yet is absent from the result: count them as 0.
-pub fn sessions_played<'a>(
+pub(crate) fn sessions_played<'a>(
     entries: &[LineupEntry<'a>],
     cancelled: &HashSet<Date>,
     today: Date,
@@ -77,9 +77,13 @@ pub fn sessions_played<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    use jiff::Timestamp;
     use jiff::civil::date;
 
-    use super::*;
+    use super::{Answer, LineupEntry, call_order, sessions_played};
+    use crate::domain::calendar::session::Status;
 
     fn at(s: &str) -> Timestamp {
         s.parse().unwrap()
@@ -123,19 +127,23 @@ mod tests {
                 "dispo-2-played-early",
                 "dispo-2-played-late",
                 "dispo-5-played",
-            ]
+            ],
+            "OK by answer time, then Dispo by sessions played and answer time, without KO"
         );
     }
 
     #[test]
     fn an_ok_answer_goes_before_any_dispo_answer() {
-        // The Dispo answer came first and its member never played: the OK answer still wins.
         let answers = [
             answer("dispo", Status::Dispo, "2027-03-15T08:00:00Z"),
             answer("ok", Status::Ok, "2027-03-15T20:00:00Z"),
         ];
         let played = HashMap::from([("ok", 12)]);
-        assert_eq!(call_order(&answers, &played), ["ok", "dispo"]);
+        assert_eq!(
+            call_order(&answers, &played),
+            ["ok", "dispo"],
+            "the OK answer wins over an earlier Dispo answer whose member never played"
+        );
     }
 
     #[test]
@@ -147,9 +155,17 @@ mod tests {
             answer("c", Status::Ok, "2027-03-15T10:00:00Z"),
         ];
         let played = HashMap::new();
-        assert_eq!(call_order(&answers, &played), ["c", "d", "a", "b"]);
+        assert_eq!(
+            call_order(&answers, &played),
+            ["c", "d", "a", "b"],
+            "the member id breaks the ties"
+        );
         answers.reverse();
-        assert_eq!(call_order(&answers, &played), ["c", "d", "a", "b"]);
+        assert_eq!(
+            call_order(&answers, &played),
+            ["c", "d", "a", "b"],
+            "same order with the rows reversed"
+        );
     }
 
     #[test]
@@ -164,6 +180,7 @@ mod tests {
             entry(date(2027, 3, 1), Some("bixente"), Some(1)),
             // Selected, waiting for the next game: still played.
             entry(date(2027, 3, 1), Some("carmen"), None),
+            // A guest.
             entry(date(2027, 3, 1), None, Some(1)),
             entry(date(2027, 3, 8), Some("ana"), Some(2)),
             // Cancelled date: the lineup stays, but nobody played.
@@ -174,14 +191,15 @@ mod tests {
             entry(date(2027, 3, 29), Some("bixente"), None),
         ];
         let cancelled = HashSet::from([date(2027, 3, 15)]);
-        let played = sessions_played(&entries, &cancelled, date(2027, 3, 22));
         assert_eq!(
-            played,
-            HashMap::from([("ana", 2), ("bixente", 1), ("carmen", 1)])
+            sessions_played(&entries, &cancelled, date(2027, 3, 22)),
+            HashMap::from([("ana", 2), ("bixente", 1), ("carmen", 1)]),
+            "past dates that are not cancelled, guests left out"
         );
-
-        // The next day, the session of 22 March counts.
-        let played = sessions_played(&entries, &cancelled, date(2027, 3, 23));
-        assert_eq!(played.get("ana"), Some(&3));
+        assert_eq!(
+            sessions_played(&entries, &cancelled, date(2027, 3, 23)).get("ana"),
+            Some(&3),
+            "the next day, the session of 22 March counts"
+        );
     }
 }

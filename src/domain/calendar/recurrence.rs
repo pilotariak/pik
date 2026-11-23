@@ -13,14 +13,14 @@ use super::CalendarError;
 /// Fixed for the season, like the weekday: answers are keyed by date, so a new schedule is a
 /// new slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Interval {
+pub(crate) enum Interval {
     Weekly,
     Fortnightly,
 }
 
 impl Interval {
     /// Days between two sessions.
-    pub fn days(self) -> i64 {
+    pub(crate) fn days(self) -> i64 {
         match self {
             Self::Weekly => 7,
             Self::Fortnightly => 14,
@@ -47,7 +47,7 @@ impl TryFrom<i64> for Interval {
 /// weeks: 2026 has 53 ISO weeks, and weeks 53 and 1 are both odd. Two slots that alternate on
 /// the same weekday have anchors one week apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Recurrence {
+pub(crate) struct Recurrence {
     anchor: Date,
     interval: Interval,
     season_end: Date,
@@ -56,7 +56,7 @@ pub struct Recurrence {
 impl Recurrence {
     /// The recurrence of a slot, from `anchor_date`, `interval_weeks`, `season_start` and
     /// `season_end`.
-    pub fn new(
+    pub(crate) fn new(
         anchor: Date,
         interval: Interval,
         season_start: Date,
@@ -73,12 +73,12 @@ impl Recurrence {
     }
 
     /// The weekday of every session.
-    pub fn weekday(&self) -> Weekday {
+    pub(crate) fn weekday(&self) -> Weekday {
         self.anchor.weekday()
     }
 
     /// Every session date of the season, in order.
-    pub fn dates(&self) -> impl Iterator<Item = Date> {
+    pub(crate) fn dates(&self) -> impl Iterator<Item = Date> {
         let season_end = self.season_end;
         self.anchor
             .series(self.interval.days().days())
@@ -86,27 +86,32 @@ impl Recurrence {
     }
 
     /// Whether a session falls on `date`.
-    pub fn contains(&self, date: Date) -> bool {
+    pub(crate) fn contains(&self, date: Date) -> bool {
         // Civil dates have no clock change: every day lasts 24 hours.
         let days = self.anchor.duration_until(date).as_hours() / 24;
         date <= self.season_end && days >= 0 && days % self.interval.days() == 0
     }
 
     /// The first session on or after `date`, if the season has one.
-    pub fn next_on_or_after(&self, date: Date) -> Option<Date> {
+    pub(crate) fn next_on_or_after(&self, date: Date) -> Option<Date> {
         self.dates().find(|session| *session >= date)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use jiff::civil::date;
+    use jiff::civil::{Date, Weekday, date};
 
-    use super::*;
+    use super::{Interval, Recurrence};
+    use crate::domain::calendar::CalendarError;
 
     fn iso_week(date: Date) -> (i16, i8) {
         let week = date.iso_week_date();
         (week.year(), week.week())
+    }
+
+    fn fortnightly(anchor: Date, season_end: Date) -> Recurrence {
+        Recurrence::new(anchor, Interval::Fortnightly, date(2026, 9, 1), season_end).unwrap()
     }
 
     #[test]
@@ -118,7 +123,11 @@ mod tests {
             date(2026, 10, 6),
         )
         .unwrap();
-        assert_eq!(slot.weekday(), Weekday::Monday);
+        assert_eq!(
+            slot.weekday(),
+            Weekday::Monday,
+            "the anchor gives the weekday"
+        );
         assert_eq!(
             slot.dates().collect::<Vec<_>>(),
             [
@@ -127,23 +136,22 @@ mod tests {
                 date(2026, 9, 21),
                 date(2026, 9, 28),
                 date(2026, 10, 5),
-            ]
+            ],
+            "every Monday from the anchor to the end of the season"
         );
     }
 
     #[test]
     fn fortnightly_slot_keeps_fourteen_days_across_iso_week_53_of_2026() {
-        // The premise: 2026 has 53 ISO weeks.
-        assert_eq!(date(2026, 12, 28).iso_week_date().weeks_in_year(), 53);
+        assert_eq!(
+            date(2026, 12, 28).iso_week_date().weeks_in_year(),
+            53,
+            "the premise: 2026 has 53 ISO weeks"
+        );
 
-        let slot = Recurrence::new(
-            date(2026, 12, 14),
-            Interval::Fortnightly,
-            date(2026, 9, 1),
-            date(2027, 1, 31),
-        )
-        .unwrap();
-        let dates: Vec<_> = slot.dates().collect();
+        let dates: Vec<_> = fortnightly(date(2026, 12, 14), date(2027, 1, 31))
+            .dates()
+            .collect();
         assert_eq!(
             dates,
             [
@@ -151,99 +159,94 @@ mod tests {
                 date(2026, 12, 28),
                 date(2027, 1, 11),
                 date(2027, 1, 25),
-            ]
+            ],
+            "every other Monday, 14 days apart across the new year"
         );
         assert_eq!(
             dates.iter().copied().map(iso_week).collect::<Vec<_>>(),
-            [(2026, 51), (2026, 53), (2027, 2), (2027, 4)]
+            [(2026, 51), (2026, 53), (2027, 2), (2027, 4)],
+            "weeks 51, 53, 2 and 4: no parity rule"
         );
     }
 
     #[test]
     fn alternating_slots_never_meet_although_weeks_53_and_1_are_both_odd() {
-        let season = (date(2026, 9, 1), date(2027, 6, 30));
-        let a = Recurrence::new(
-            date(2026, 12, 21),
-            Interval::Fortnightly,
-            season.0,
-            season.1,
-        )
-        .unwrap();
-        let b = Recurrence::new(
-            date(2026, 12, 28),
-            Interval::Fortnightly,
-            season.0,
-            season.1,
-        )
-        .unwrap();
+        let a = fortnightly(date(2026, 12, 21), date(2027, 6, 30));
+        let b = fortnightly(date(2026, 12, 28), date(2027, 6, 30));
 
         // Week 53 belongs to B and week 1 to A, one week apart: an odd-week rule would give both
         // to the same slot, and that slot would play two weeks in a row.
-        assert!(b.contains(date(2026, 12, 28)));
-        assert!(a.contains(date(2027, 1, 4)));
-        assert_eq!(iso_week(date(2026, 12, 28)), (2026, 53));
-        assert_eq!(iso_week(date(2027, 1, 4)), (2027, 1));
+        assert_eq!(
+            iso_week(date(2026, 12, 28)),
+            (2026, 53),
+            "28 December is in week 53"
+        );
+        assert_eq!(
+            iso_week(date(2027, 1, 4)),
+            (2027, 1),
+            "4 January is in week 1"
+        );
+        assert!(b.contains(date(2026, 12, 28)), "B plays in week 53");
+        assert!(a.contains(date(2027, 1, 4)), "A plays in week 1");
 
         let mut both: Vec<_> = a.dates().chain(b.dates()).collect();
         both.sort();
         for pair in both.windows(2) {
-            assert_eq!(pair[0].duration_until(pair[1]).as_hours(), 7 * 24);
+            assert_eq!(
+                pair[0].duration_until(pair[1]).as_hours(),
+                7 * 24,
+                "A and B alternate every week: {} then {}",
+                pair[0],
+                pair[1]
+            );
         }
     }
 
     #[test]
     fn contains_only_the_dates_of_the_recurrence_within_the_season() {
-        let slot = Recurrence::new(
-            date(2026, 12, 14),
-            Interval::Fortnightly,
-            date(2026, 9, 1),
-            date(2027, 1, 25),
-        )
-        .unwrap();
-        assert!(slot.contains(date(2026, 12, 14)));
-        assert!(slot.contains(date(2026, 12, 28)));
-        assert!(slot.contains(date(2027, 1, 25)));
-        // Same weekday, the off week.
-        assert!(!slot.contains(date(2026, 12, 21)));
-        // Another weekday.
-        assert!(!slot.contains(date(2026, 12, 15)));
-        // Two weeks before the first session.
-        assert!(!slot.contains(date(2026, 11, 30)));
-        // After the season.
-        assert!(!slot.contains(date(2027, 2, 8)));
+        let slot = fortnightly(date(2026, 12, 14), date(2027, 1, 25));
+        for (day, expected, why) in [
+            (date(2026, 12, 14), true, "the first session"),
+            (date(2026, 12, 28), true, "two weeks later"),
+            (date(2027, 1, 25), true, "the last day of the season"),
+            (date(2026, 12, 21), false, "same weekday, the off week"),
+            (date(2026, 12, 15), false, "another weekday"),
+            (
+                date(2026, 11, 30),
+                false,
+                "two weeks before the first session",
+            ),
+            (date(2027, 2, 8), false, "after the season"),
+        ] {
+            assert_eq!(slot.contains(day), expected, "{day}: {why}");
+        }
     }
 
     #[test]
     fn next_session_on_or_after_a_date() {
-        let slot = Recurrence::new(
-            date(2026, 12, 14),
-            Interval::Fortnightly,
-            date(2026, 9, 1),
-            date(2027, 1, 25),
-        )
-        .unwrap();
-        assert_eq!(
-            slot.next_on_or_after(date(2026, 9, 1)),
-            Some(date(2026, 12, 14))
-        );
-        assert_eq!(
-            slot.next_on_or_after(date(2026, 12, 15)),
-            Some(date(2026, 12, 28))
-        );
-        assert_eq!(
-            slot.next_on_or_after(date(2026, 12, 28)),
-            Some(date(2026, 12, 28))
-        );
-        assert_eq!(slot.next_on_or_after(date(2027, 1, 26)), None);
+        let slot = fortnightly(date(2026, 12, 14), date(2027, 1, 25));
+        for (from, expected) in [
+            (date(2026, 9, 1), Some(date(2026, 12, 14))),
+            (date(2026, 12, 15), Some(date(2026, 12, 28))),
+            (date(2026, 12, 28), Some(date(2026, 12, 28))),
+            (date(2027, 1, 26), None),
+        ] {
+            assert_eq!(
+                slot.next_on_or_after(from),
+                expected,
+                "next session from {from}"
+            );
+        }
     }
 
     #[test]
     fn rejects_an_interval_other_than_one_or_two_weeks() {
-        assert_eq!(Interval::try_from(1), Ok(Interval::Weekly));
-        assert_eq!(Interval::try_from(2), Ok(Interval::Fortnightly));
+        assert_eq!(Interval::try_from(1), Ok(Interval::Weekly), "1 week");
+        assert_eq!(Interval::try_from(2), Ok(Interval::Fortnightly), "2 weeks");
         assert_eq!(
             Interval::try_from(3),
-            Err(CalendarError::InvalidInterval(3))
+            Err(CalendarError::InvalidInterval(3)),
+            "3 weeks is not a slot interval"
         );
     }
 
@@ -257,15 +260,23 @@ mod tests {
                 date(2027, 6, 30),
             )
         };
-        assert!(new(date(2026, 9, 1)).is_ok());
-        assert!(new(date(2027, 6, 30)).is_ok());
+        assert!(
+            new(date(2026, 9, 1)).is_ok(),
+            "on the first day of the season"
+        );
+        assert!(
+            new(date(2027, 6, 30)).is_ok(),
+            "on the last day of the season"
+        );
         assert_eq!(
             new(date(2026, 8, 31)),
-            Err(CalendarError::AnchorOutsideSeason)
+            Err(CalendarError::AnchorOutsideSeason),
+            "the day before the season"
         );
         assert_eq!(
             new(date(2027, 7, 1)),
-            Err(CalendarError::AnchorOutsideSeason)
+            Err(CalendarError::AnchorOutsideSeason),
+            "the day after the season"
         );
     }
 }

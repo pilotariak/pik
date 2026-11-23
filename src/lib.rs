@@ -7,7 +7,7 @@
 //! pages outside it. This file only wires them into the Worker entry points.
 
 mod api;
-pub mod calendar;
+mod domain;
 mod web;
 
 use worker::{Context, Env, Request, Response, Result, Router, event};

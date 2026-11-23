@@ -1,24 +1,19 @@
 // SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
 // SPDX-License-Identifier: Apache-2.0
 
-// Applies database/migrations/*.sql to the D1 binding of a Worker in Miniflare, the way
-// `wrangler d1 migrations apply --local` does (wrangler's SQL splitter, then one batch per
-// file, without the d1_migrations bookkeeping), and checks what the schema promises: foreign keys and ON DELETE CASCADE are enforced,
-// deleting a slot leaves none of its rows, and a member who leaves keeps their answers and
-// lineup entries and frees their name.
+// Applies database/migrations/*.sql to the D1 binding of the Worker, the way
+// `wrangler d1 migrations apply --local` does (wrangler's SQL splitter, then one batch per file,
+// without the d1_migrations bookkeeping), and checks what the schema promises: foreign keys and
+// ON DELETE CASCADE are enforced, deleting a slot leaves none of its rows, and a member who
+// leaves keeps their answers and lineup entries and frees their name.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { Miniflare } from "miniflare";
 import { unstable_splitSqlQuery as splitSqlQuery } from "wrangler";
+import { startWorker } from "./worker.mjs";
 
 const migrations = "database/migrations";
-
-// Same compatibility date as the deployed Worker.
-const compatibilityDate = readFileSync("wrangler.jsonc", "utf8").match(
-  /"compatibility_date":\s*"([^"]+)"/,
-)[1];
 
 // Every table of the schema, by what ties its rows to a slot. A new table must be added here,
 // so that the deletion test covers it.
@@ -44,28 +39,7 @@ let mf;
 let db;
 
 before(async () => {
-  mf = new Miniflare({
-    workers: [
-      {
-        config: {
-          name: "pik-schema",
-          compatibilityDate,
-          manifest: {
-            mainModule: "index.js",
-            modules: {
-              "index.js": {
-                type: "esm",
-                contents: "export default { fetch: () => new Response(null, { status: 404 }) };",
-              },
-            },
-          },
-          env: {
-            DB: { type: "d1", id: "DB" },
-          },
-        },
-      },
-    ],
-  });
+  mf = startWorker();
   db = await mf.getD1Database("DB");
 
   const files = readdirSync(migrations)
