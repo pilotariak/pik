@@ -31,7 +31,7 @@ INFO=[🔵]
 
 .PHONY: help
 help:
-	@echo -e "$(OK_COLOR)      $(BANNER)$(NO_COLOR)"
+	@echo -e "$(OK_COLOR)      P I L O T A R I A K  /  $(BANNER)$(NO_COLOR)"
 	@echo "------------------------------------------------------------------"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make ${INFO_COLOR}<target>${NO_COLOR}\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  ${INFO_COLOR}%-25s${NO_COLOR} %s\n", $$1, $$2 } /^##@/ { printf "\n${WHITE_COLOR}%s${NO_COLOR}\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -50,11 +50,80 @@ check-%:
 		echo -e "$(ERROR_COLOR)$(KO)$(NO_COLOR) $*"; \
 	fi
 
-.PHONY: clean
-clean: ## Clean project
-	@echo -e "$(INFO)$(INFO_COLOR)[Clean] Processing $(NO_COLOR)"
+WORKER_BUILD_VERSION = 0.9.0
+
+##@ Development
+
+.PHONY: install
+install: ## Install the Rust toolchain, worker-build and the npm dependencies
+	@echo -e "$(INFO)$(INFO_COLOR)[Install] Installing dependencies$(NO_COLOR)"
+	rustup toolchain install
+	cargo install --locked worker-build@$(WORKER_BUILD_VERSION)
+	npm ci
+
+.PHONY: build
+build: ## Build the Worker into build/ (worker-build)
+	@echo -e "$(INFO)$(INFO_COLOR)[Build] Building the Worker$(NO_COLOR)"
+	worker-build --release
+
+.PHONY: dev
+dev: ## Start local dev server (wrangler dev)
+	@echo -e "$(INFO)$(INFO_COLOR)[Dev] Starting Cloudflare Worker$(NO_COLOR)"
+	npm run dev
+
+.PHONY: check
+check: ## Check formatting and run clippy
+	@echo -e "$(INFO)$(INFO_COLOR)[Check] cargo fmt and clippy$(NO_COLOR)"
+	cargo fmt --check
+	cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings
+
+.PHONY: test
+test: build ## Run the Rust unit tests, then the Worker tests in Miniflare
+	@echo -e "$(INFO)$(INFO_COLOR)[Test] Running tests$(NO_COLOR)"
+	cargo test
+	npm test
 
 .PHONY: lint
 lint: ## Run the prek hooks on all files
 	@echo -e "$(INFO)$(INFO_COLOR)[Lint] Running prek hooks $(NO_COLOR)"
 	@prek run -a
+
+##@ Database (see docs/how-to/howto-database.md)
+
+.PHONY: migrate-local
+migrate-local: ## Apply the D1 migrations to the local database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations locally$(NO_COLOR)"
+	npm run migrate:local
+
+.PHONY: migrate-remote
+migrate-remote: ## Apply the D1 migrations to the remote database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations remotely$(NO_COLOR)"
+	npm run migrate:remote
+
+.PHONY: migrate-list
+migrate-list: ## List applied and pending migrations of the local database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Listing local migrations$(NO_COLOR)"
+	npm run migrate:list
+
+.PHONY: db-local
+db-local: guard-SQL ## Run SQL on the local database: make db-local SQL="SELECT ..."
+	npm run db:local -- "$(SQL)"
+
+.PHONY: db-remote
+db-remote: guard-SQL ## Run SQL on the remote database: make db-remote SQL="SELECT ..."
+	npm run db:remote -- "$(SQL)"
+
+##@ Deployment
+
+.PHONY: deploy
+deploy: migrate-remote ## Apply the D1 migrations remotely, then deploy the Worker
+	@echo -e "$(INFO)$(INFO_COLOR)[Deploy] Deploying to production$(NO_COLOR)"
+	npm run deploy
+
+##@ Maintenance
+
+.PHONY: clean
+clean: ## Clean project
+	@echo -e "$(INFO)$(INFO_COLOR)[Clean] Processing $(NO_COLOR)"
+	cargo clean
+	rm -rf build node_modules .wrangler

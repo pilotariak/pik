@@ -21,3 +21,11 @@ build/
 *.so
 *.dylib
 *.exe
+
+# Node
+node_modules/
+
+# Wrangler
+.wrangler/
+.dev.vars*
+!.dev.vars.example

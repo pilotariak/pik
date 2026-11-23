@@ -1,0 +1,41 @@
+// SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+// SPDX-License-Identifier: Apache-2.0
+
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pik",
+  // Entry module written by worker-build, which compiles the crate to wasm32-unknown-unknown.
+  "main": "build/index.js",
+  // Must not be later than the workerd bundled with the pinned wrangler (1.20261113.1).
+  "compatibility_date": "2026-11-13",
+  // `wrangler dev` and `wrangler deploy` run this before starting. Keep the worker-build
+  // version in step with the `worker` crate in Cargo.toml.
+  "build": {
+    "command": "cargo install -q --locked worker-build@0.9.0 && worker-build --release"
+  },
+  // Custom Domain on the pilotariak.com zone: `wrangler deploy` creates its DNS record and
+  // certificate. A Custom Domain takes a bare hostname, without a path or a wildcard.
+  "routes": [
+    {
+      "pattern": "pik.pilotariak.com",
+      "custom_domain": true
+    }
+  ],
+  // Slots, members, answers and lineups: private data of a group of friends. The database
+  // is restricted to the EU jurisdiction, so its data is stored and processed in the EU:
+  //   npx wrangler d1 create pilotariak-pik --jurisdiction eu
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pilotariak-pik",
+      "database_id": "cd93b8cb-8a84-4419-843b-db32b231cbc0",
+      "migrations_dir": "database/migrations"
+    }
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
+}
