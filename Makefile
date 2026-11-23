@@ -31,7 +31,7 @@ INFO=[🔵]
 
 .PHONY: help
 help:
-	@echo -e "$(OK_COLOR)      $(BANNER)$(NO_COLOR)"
+	@echo -e "$(OK_COLOR)      P I L O T A R I A K  /  $(BANNER)$(NO_COLOR)"
 	@echo "------------------------------------------------------------------"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make ${INFO_COLOR}<target>${NO_COLOR}\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  ${INFO_COLOR}%-25s${NO_COLOR} %s\n", $$1, $$2 } /^##@/ { printf "\n${WHITE_COLOR}%s${NO_COLOR}\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -69,12 +69,7 @@ build: ## Build the Worker into build/ (worker-build)
 .PHONY: dev
 dev: ## Start local dev server (wrangler dev)
 	@echo -e "$(INFO)$(INFO_COLOR)[Dev] Starting Cloudflare Worker$(NO_COLOR)"
-	npx wrangler dev
-
-.PHONY: db-migrate-local
-db-migrate-local: ## Apply the D1 migrations to the local database
-	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations locally$(NO_COLOR)"
-	npx wrangler d1 migrations apply DB --local
+	npm run dev
 
 .PHONY: check
 check: ## Check formatting and run clippy
@@ -93,13 +88,37 @@ lint: ## Run the prek hooks on all files
 	@echo -e "$(INFO)$(INFO_COLOR)[Lint] Running prek hooks $(NO_COLOR)"
 	@prek run -a
 
+##@ Database (see docs/how-to/howto-database.md)
+
+.PHONY: migrate-local
+migrate-local: ## Apply the D1 migrations to the local database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations locally$(NO_COLOR)"
+	npm run migrate:local
+
+.PHONY: migrate-remote
+migrate-remote: ## Apply the D1 migrations to the remote database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations remotely$(NO_COLOR)"
+	npm run migrate:remote
+
+.PHONY: migrate-list
+migrate-list: ## List applied and pending migrations of the local database
+	@echo -e "$(INFO)$(INFO_COLOR)[DB] Listing local migrations$(NO_COLOR)"
+	npm run migrate:list
+
+.PHONY: db-local
+db-local: guard-SQL ## Run SQL on the local database: make db-local SQL="SELECT ..."
+	npm run db:local -- "$(SQL)"
+
+.PHONY: db-remote
+db-remote: guard-SQL ## Run SQL on the remote database: make db-remote SQL="SELECT ..."
+	npm run db:remote -- "$(SQL)"
+
 ##@ Deployment
 
 .PHONY: deploy
-deploy: ## Apply the D1 migrations remotely, then deploy the Worker
+deploy: migrate-remote ## Apply the D1 migrations remotely, then deploy the Worker
 	@echo -e "$(INFO)$(INFO_COLOR)[Deploy] Deploying to production$(NO_COLOR)"
-	npx wrangler d1 migrations apply DB --remote
-	npx wrangler deploy
+	npm run deploy
 
 ##@ Maintenance
 

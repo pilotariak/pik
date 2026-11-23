@@ -21,17 +21,15 @@
       "custom_domain": true
     }
   ],
-  // Slots, members, answers and lineups: private data of a group of friends.
-  // The database_id below is a placeholder, enough for `wrangler dev` and
-  // `wrangler d1 migrations apply DB --local`. Create the database once, in Western Europe,
-  // then paste the database_id it prints here:
-  //   npx wrangler d1 create pik --location weur
+  // Slots, members, answers and lineups: private data of a group of friends. The database
+  // is restricted to the EU jurisdiction, so its data is stored and processed in the EU:
+  //   npx wrangler d1 create pilotariak-pik --jurisdiction eu
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "pik",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
+      "database_name": "pilotariak-pik",
+      "database_id": "cd93b8cb-8a84-4419-843b-db32b231cbc0",
+      "migrations_dir": "database/migrations"
     }
   ],
   "observability": {

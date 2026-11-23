@@ -19,13 +19,16 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 pik/
 ├── src/
 │   └── lib.rs              # Worker entry: #[event(fetch)] and the router
-├── migrations/             # D1 migrations, applied in order by wrangler
+├── database/
+│   └── migrations/         # D1 migrations, applied in order by wrangler
+├── docs/how-to/
+│   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
 │   └── health.test.mjs     # Worker tests: run build/ in Miniflare with node:test
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
-└── package.json            # wrangler and miniflare, pinned
+└── package.json            # wrangler and miniflare (pinned), dev, deploy, migration and query scripts
 ```
 
 `worker-build` compiles the crate to `wasm32-unknown-unknown` and writes `build/index.js` and `build/index_bg.wasm`.
@@ -68,8 +71,8 @@ make install         # rustup toolchain install, cargo install worker-build, npm
 ## Running Locally
 
 ```bash
-make db-migrate-local   # npx wrangler d1 migrations apply DB --local
-make dev                # npx wrangler dev  →  http://localhost:8787
+make migrate-local   # npm run migrate:local: apply the migrations to the local D1
+make dev             # npm run dev: wrangler dev --persist-to .wrangler/state  →  http://localhost:8787
 ```
 
 ```bash
@@ -78,17 +81,19 @@ curl http://localhost:8787/api/v1/health
 
 ## Database
 
-- Binding `DB`, database `pik`, migrations in `migrations/`.
-- The `database_id` in `wrangler.jsonc` is a placeholder until the database exists. Create it once, in Western Europe,
-  then paste the id it prints:
+Managed like the Frontis databases. See [How to manage the D1 database](docs/how-to/howto-database.md).
 
-  ```bash
-  npx wrangler d1 create pik --location weur
-  ```
-
-- Create a migration with `npx wrangler d1 migrations create DB <message>`, then add the `-- SPDX` header from
-  `hack/header.txt` at the top of the file.
-- Never edit a migration that has been applied remotely: add a new one.
+- Binding `DB`, database `pilotariak-pik` (named like the Frontis databases, `pilotariak-<name>`), migrations in
+  `database/migrations/`. Commands call the database by its name.
+- The database is restricted to the EU jurisdiction: its data is stored and processed in the EU.
+- `wrangler dev`, the local migrations and the local queries share one local state, `.wrangler/state/`. The local
+  database has no tables until `make migrate-local` runs.
+- `make migrate-local`, `make migrate-remote`, `make migrate-list`, `make db-local SQL="..."` and
+  `make db-remote SQL="..."` wrap the `package.json` scripts of the same names (`migrate:local`, …).
+- Create a migration with `npx wrangler d1 migrations create pilotariak-pik "<description>"`, then add the `-- SPDX`
+  header from `hack/header.txt` at the top of the file.
+- Never edit a migration that has been applied remotely: add a new one. Never paste remote rows into an issue, a pull
+  request or a log: they are private data.
 
 ## Testing
 
@@ -107,11 +112,11 @@ CI (`.github/workflows/ci.yml`) runs all of this on every pull request, and appl
 ## Deployment
 
 ```bash
-make deploy          # npx wrangler d1 migrations apply DB --remote, then npx wrangler deploy
+make deploy          # make migrate-remote, then npm run deploy (wrangler deploy)
 ```
 
-Create the database first (see [Database](#database)). `wrangler deploy` attaches the Custom Domain
-`pik.pilotariak.com` declared in `routes`, then `https://pik.pilotariak.com/api/v1/health` answers.
+`wrangler deploy` attaches the Custom Domain `pik.pilotariak.com` declared in `routes`, then
+`https://pik.pilotariak.com/api/v1/health` answers.
 
 ## Platform features the next issues use
 
