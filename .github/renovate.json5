@@ -32,8 +32,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "worker-build and cargo-deny pins of the wrangler.toml build command and the CI",
-      "managerFilePatterns": ["/^wrangler\\.toml$/", "/^\\.github/workflows/ci\\.yml$/"],
+      "description": "worker-build and cargo-deny pins of wrangler.toml, hack/workers-builds.sh and the CI",
+      "managerFilePatterns": [
+        "/^wrangler\\.toml$/",
+        "/^hack/workers-builds\\.sh$/",
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
       "matchStrings": ["(?<depName>worker-build|cargo-deny)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "crate",
       // `cargo install crate@0.9.0` installs exactly 0.9.0: not a caret range as in Cargo.toml.

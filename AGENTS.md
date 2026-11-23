@@ -62,6 +62,8 @@ pik/
 ├── docs/how-to/
 │   ├── howto-api.md        # Call the API with curl: tokens, slots, joins, answers, lineups, recovery, errors
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
+├── hack/
+│   └── workers-builds.sh   # Workers Builds commands: build (rustup, worker-build), deploy (migrations, deploy)
 ├── tests/
 │   ├── worker.mjs          # Starts build/ in Miniflare with the bindings of wrangler.toml; applies the migrations
 │   ├── api.mjs             # API test helpers: request, Paris dates, fixtures, the access check of /slots/:id routes
@@ -289,6 +291,33 @@ make deploy          # make migrate-remote, then bun run deploy (wrangler deploy
 `https://pik.pilotariak.com/api/v1/health` answers. On the pilotariak.com zone, it creates the DNS record and the
 certificate. A Custom Domain takes a bare hostname, without a path or a wildcard.
 
+### Workers Builds
+
+pik is connected to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/): a push to `main` builds
+and deploys it. The build image (Ubuntu 24.04) has Node.js and bun but no Rust, so the dashboard calls only
+`hack/workers-builds.sh`, reviewed in this repository:
+
+| Setting           | Value                             |
+| ----------------- | --------------------------------- |
+| Production branch | `main`                            |
+| Build command     | `./hack/workers-builds.sh build`  |
+| Deploy command    | `./hack/workers-builds.sh deploy` |
+| Root directory    | the repository root (default)     |
+| Preview builds    | disabled                          |
+
+- `build` installs rustup when it is missing (minimal profile, no default toolchain), then the toolchain of
+  `rust-toolchain.toml` and worker-build, and runs `worker-build --release`. Workers Builds installs the bun
+  dependencies of `bun.lock` before it. The script runs locally too, with the rustup already installed.
+- `deploy` runs the steps of `make deploy`, and like it touches production: `bun run migrate:remote`, then
+  `bun run deploy`. Each dashboard command starts with a fresh `PATH`, and `wrangler deploy` always runs the
+  `[build]` command of `wrangler.toml` (no flag skips it), which calls cargo: `deploy` sources `$HOME/.cargo/env`
+  first, and that second build reuses `target/`.
+- Preview builds stay disabled. Their default command, `wrangler preview`, needs a `previews` block with preview-only
+  D1 and rate limiters, and pik never points a public preview at its production database.
+- The build token needs D1 write access for the migrations (Account > D1 > Edit), which the token Workers Builds
+  creates does not have, and the rights to deploy the Worker and its Custom Domain (Account > Workers Scripts > Edit,
+  Zone > Workers Routes > Edit on pilotariak.com), which it has.
+
 ## Platform features
 
 All are in workers-rs 0.9.0:
@@ -320,9 +349,9 @@ All are in workers-rs 0.9.0:
 
 ## Key Conventions
 
-- Keep versions in step: the `worker` crate and `worker-build` (Cargo.toml, `wrangler.toml`, Makefile, CI); `wrangler`
-  and `miniflare` at the versions wrangler bundles, both exact; `compatibility_date` no later than the workerd that
-  wrangler bundles; `cargo-deny` (Makefile, CI).
+- Keep versions in step: the `worker` crate and `worker-build` (Cargo.toml, `wrangler.toml`, Makefile, CI,
+  `hack/workers-builds.sh`); `wrangler` and `miniflare` at the versions wrangler bundles, both exact;
+  `compatibility_date` no later than the workerd that wrangler bundles; `cargo-deny` (Makefile, CI).
 - Renovate (`.github/renovate.json5`) does most of it: one pull request for `worker` and every `worker-build` pin
   (custom regex managers for the pins outside Cargo.toml), one for `wrangler` and `miniflare`, weekly lock file
   maintenance for `Cargo.lock` and `bun.lock` (the only way transitive crates such as jiff-tzdb move), and the
