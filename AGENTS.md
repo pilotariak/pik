@@ -18,13 +18,16 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 ```text
 pik/
 ├── src/
-│   └── lib.rs              # Worker entry: #[event(fetch)] and the router
+│   ├── lib.rs              # Worker entry: #[event(fetch)], the router and the landing page headers
+│   └── landing.html        # Landing page served at GET /, embedded with include_str!
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
-│   └── health.test.mjs     # Worker tests: run build/ in Miniflare with node:test
+│   ├── worker.mjs          # Starts build/ in Miniflare, shared by the test files
+│   ├── health.test.mjs     # Worker tests, run with node:test
+│   └── landing.test.mjs
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
@@ -36,14 +39,27 @@ pik/
 
 ## Routes
 
-Every route lives under `/api/v1/`. Installed app versions stay in use for months, so a breaking change goes to
+Every API route lives under `/api/v1/`. Installed app versions stay in use for months, so a breaking change goes to
 `/api/v2/` while `/api/v1/` keeps working. If Kancha web forwards `/api/*` to pik unchanged (kancha ADR-0004, still
 proposed), a cookie with the path `/api` covers every version whether a client calls pik directly or through the
-Kancha origin.
+Kancha origin. Only the landing page lives outside `/api/`. The workers-rs `Router` answers 405 to any other method
+on a registered path.
 
-| Method | Path             | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| `GET`  | `/api/v1/health` | Liveness check: `{"status":"ok"}` |
+| Method | Path             | Description                                                         |
+| ------ | ---------------- | ------------------------------------------------------------------- |
+| `GET`  | `/`              | Landing page (HTML): what pik is, its resources, live health status |
+| `GET`  | `/api/v1/health` | Liveness check: `{"status":"ok"}`                                   |
+
+### Landing page
+
+`src/landing.html` is one HTML document with inline CSS and script, no build step, in the style of the Frontis,
+Azkena and Xilo landing pages (design tokens from frontis `DESIGN.md`).
+
+- `__PIK_VERSION__` is replaced with `CARGO_PKG_VERSION` when the page is served.
+- `GET /` sends `Content-Security-Policy` (Azkena's policy plus `connect-src 'self'` for the status script) and
+  `Cache-Control: public, max-age=300`: the page holds no private data. A new origin on the page needs a CSP change.
+- The resource cards follow the routes of #4. Keep them in step with the OpenAPI contract, and never put slot,
+  member or answer data, or real player or venue names, on the page.
 
 ## Rules the next issues must keep
 
@@ -54,7 +70,7 @@ Kancha origin.
   slot's data once it is no longer needed.
 - **Dates in `Europe/Paris`.** Session dates, answer deadlines and the purge are computed in `Europe/Paris`. Cron
   Triggers run in UTC, and the offset is one hour in winter and two in summer.
-- **Routes under `/api/v1/`**, as above.
+- **API routes under `/api/v1/`**, as above. Only the landing page (`GET /`) lives outside it.
 
 ## Dev Setup
 
@@ -105,7 +121,8 @@ make lint            # prek run -a: license headers, formatting, YAML/TOML/JSON,
 
 - Pure Rust logic (calendar, states) gets unit tests in its module, run by `cargo test` on the host.
 - Behavior that needs the runtime (routes, D1, Cron, Rate Limiting) gets a test in `tests/`, which loads `build/` in
-  Miniflare, as the workers-rs README recommends.
+  Miniflare, as the workers-rs README recommends. Start the Worker with `startWorker()` from `tests/worker.mjs`, and
+  declare a new binding there, so that every test file runs the same Worker.
 
 CI (`.github/workflows/ci.yml`) runs all of this on every pull request, and applies the migrations to a local D1.
 
@@ -139,4 +156,4 @@ All are in workers-rs 0.9.0:
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) and carry a DCO `Signed-off-by`
   (`git commit -s`, see CONTRIBUTING.md).
 - License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC and
-  JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL.
+  JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.

@@ -5,7 +5,18 @@
 path = "hack/header.txt"
 
 [files]
-includes = ["*.rs", "*.yml", "*.yaml", "*.toml", "*.sh", "*.jsonc", "*.sql", "*.mjs", "Makefile"]
+includes = [
+  "*.rs",
+  "*.yml",
+  "*.yaml",
+  "*.toml",
+  "*.sh",
+  "*.jsonc",
+  "*.sql",
+  "*.mjs",
+  "*.html",
+  "Makefile",
+]
 
 excludes = [
   "hack/header.txt",
