@@ -1,22 +1,20 @@
 // SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::Serialize;
+//! pik, the slots service behind Kancha's Créneaux tab: a Cloudflare Worker with a D1 database.
+//!
+//! `api` holds the REST API under `/api/v1/`, one module per resource, and `web` the public
+//! pages outside it. This file only wires them into the Worker entry points.
+
+mod api;
+mod web;
+
 use worker::{Context, Env, Request, Response, Result, Router, event};
 
-#[derive(Serialize)]
-struct Health {
-    status: &'static str,
-}
-
-// Every pik route lives under /api/v1/: Kancha web forwards /api/* unchanged, and a breaking
-// change goes to /api/v2/ while installed app versions keep calling /api/v1/.
+// The workers-rs Router answers 405 to any other method on a registered path, and 404 to an
+// unknown path.
 #[event(fetch)]
-async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    Router::new()
-        .get("/api/v1/health", |_, _| {
-            Response::from_json(&Health { status: "ok" })
-        })
-        .run(req, env)
-        .await
+async fn fetch(request: Request, env: Env, _context: Context) -> Result<Response> {
+    let router = web::routes(api::routes(Router::new()));
+    router.run(request, env).await
 }
