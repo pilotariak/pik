@@ -18,8 +18,14 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 ```text
 pik/
 ├── src/
-│   ├── lib.rs              # Worker entry: #[event(fetch)], the router and the landing page headers
-│   └── landing.html        # Landing page served at GET /, embedded with include_str!
+│   ├── lib.rs              # Worker entry: #[event(fetch)] wires the api and web routes
+│   ├── api/
+│   │   ├── mod.rs          # routes(): the /api/v1 prefix (v1! macro), one module per resource
+│   │   └── health.rs       # GET /api/v1/health
+│   └── web/
+│       ├── mod.rs          # routes(): the public pages outside /api/
+│       ├── landing.rs      # GET /: version, CSP and Cache-Control
+│       └── landing.html    # The landing page, embedded with include_str!
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
@@ -37,6 +43,28 @@ pik/
 `worker-build` compiles the crate to `wasm32-unknown-unknown` and writes `build/index.js` and `build/index_bg.wasm`.
 `wrangler dev` and `wrangler deploy` run it through the `build` command of `wrangler.jsonc`.
 
+## Module layout
+
+One crate split into modules, in the `mod.rs` style. Modules are private or `pub(crate)`: the crate is a `cdylib`, so
+nothing needs `pub`. New code goes here:
+
+- **`api/`**: one file per resource, named like the resource cards of the landing page and the OpenAPI tags
+  (`slots.rs`, `join.rs`, `members.rs`, `sessions.rs`, `lineups.rs`, `recovery.rs`). A file holds the resource's
+  handlers, its request and response types, and its `#[utoipa::path]` annotations. `api/mod.rs` registers them with
+  `v1!("/path")`, the only place the version appears; a breaking change adds `api/v2/` for the handlers that change
+  only. Code shared by the routes gets its own file: `auth.rs` (player token, `Origin` check, organizer role),
+  `problem.rs` (RFC 9457 errors), `idempotency.rs`, `openapi.rs`.
+- **`domain/`**: pure logic and types: the calendar (`calendar/` of #3 moves here once merged), session states,
+  ids, invite code, player token. It never imports `worker`, so `cargo test` runs it on the host.
+- **`db/`**: D1 queries, one file per table, returning `domain` types.
+- **`web/`**: the public pages outside `/api/`.
+- **`purge.rs`**: the daily Cron of #5, called from an `#[event(scheduled)]` handler in `lib.rs`.
+
+Dependencies point one way: `api` uses `db` and `domain`, `db` uses `domain`, `domain` uses neither. workers-rs has
+no middleware: what every response needs (security headers, `Cache-Control: private, no-store`, problem+json instead
+of the Router's plain-text 404 and 405 on `/api/*`) goes after `router.run()` in `fetch`. Tests follow the same split:
+`tests/<resource>.test.mjs`.
+
 ## Routes
 
 Every API route lives under `/api/v1/`. Installed app versions stay in use for months, so a breaking change goes to
@@ -52,7 +80,7 @@ on a registered path.
 
 ### Landing page
 
-`src/landing.html` is one HTML document with inline CSS and script, no build step, in the style of the Frontis,
+`src/web/landing.html` is one HTML document with inline CSS and script, no build step, in the style of the Frontis,
 Azkena and Xilo landing pages (design tokens from frontis `DESIGN.md`).
 
 - `__PIK_VERSION__` is replaced with `CARGO_PKG_VERSION` when the page is served.
@@ -153,6 +181,9 @@ All are in workers-rs 0.9.0:
   and `miniflare` at the versions wrangler bundles; `compatibility_date` no later than the workerd that wrangler
   bundles.
 - Do not bump `version` in `Cargo.toml` by hand: release-please does it from conventional commits.
+- `Cargo.toml` forbids `unsafe` code and turns on `clippy::pedantic`, and `make check` fails on any warning. Silence a
+  lint with `#[expect(lint, reason = "...")]`, never `#[allow]`. In tests, import items by name (no `use super::*`) and
+  give every assertion a message.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) and carry a DCO `Signed-off-by`
   (`git commit -s`, see CONTRIBUTING.md).
 - License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC and
