@@ -26,12 +26,18 @@ describe("token transport", () => {
     assert.equal(res.status, 200, res.text);
   });
 
-  test("a write with the cookie needs Kancha's Origin", async () => {
+  test("a write with the cookie needs an Origin of ALLOWED_ORIGINS", async () => {
     const w = await world(call);
     const path = `/slots/${w.slot}/sessions/${w.session}/answer`;
     const body = { status: "ok" };
     assertProblem(await call("PUT", path, { cookie: w.player.token, body }), 403, "origin-not-allowed");
-    for (const origin of ["https://evil.example", "null", "https://kancha.pilotariak.com.evil.example"]) {
+    // http://localhost:8081, the origin of `make dev`, is not in the production list.
+    for (const origin of [
+      "https://evil.example",
+      "null",
+      "https://kancha.pilotariak.com.evil.example",
+      "http://localhost:8081",
+    ]) {
       assertProblem(
         await call("PUT", path, { cookie: w.player.token, body, headers: { Origin: origin } }),
         403,

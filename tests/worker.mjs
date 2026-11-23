@@ -22,6 +22,23 @@ const rateLimiters = Object.fromEntries(
   ]),
 );
 
+// The [vars] of wrangler.toml, as text bindings: `wrangler dev --var` passes strings only, so a
+// variable that is not a string would behave differently in development.
+const vars = Object.fromEntries(
+  Object.entries(rawConfig.vars ?? {}).map(([name, value]) => {
+    if (typeof value !== "string") {
+      throw new Error(`wrangler.toml: vars.${name} must be a string`);
+    }
+    return [name, { type: "text", value }];
+  }),
+);
+
+// The origins of ALLOWED_ORIGINS in wrangler.toml, split as src/api/cors.rs splits them.
+export const allowedOrigins = (rawConfig.vars?.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter((origin) => origin !== "");
+
 export function startWorker() {
   return new Miniflare({
     workers: [
@@ -45,6 +62,7 @@ export function startWorker() {
           env: {
             DB: { type: "d1", id: "DB" },
             ...rateLimiters,
+            ...vars,
           },
         },
       },
