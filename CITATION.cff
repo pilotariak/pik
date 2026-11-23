@@ -9,7 +9,7 @@ authors:
     family-names: Lamirault
     email: nicolas.lamirault@gmail.com
 abstract: >-
-  TODO: one-line description of pik.
+  Slots service for Kancha: a Cloudflare Worker in Rust and a D1 database for the courts a group of friends books every week or every other week, and each player's answer for each session.
 keywords:
   - pilotariak
   - pelota

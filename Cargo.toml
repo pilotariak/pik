@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "pik"
+version = "0.0.0"
+edition = "2024"
+description = "Slots service for Kancha: weekly or fortnightly courts booked by a group of friends"
+license = "Apache-2.0"
+repository = "https://github.com/pilotariak/pik"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+worker = { version = "0.9.0", features = ["d1"] }
