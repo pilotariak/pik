@@ -1,0 +1,120 @@
+// SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+// SPDX-License-Identifier: Apache-2.0
+
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enablePreCommit",
+    ":gitSignOff",
+    "github>pilotariak/.github//.github/renovate/autoMerge.json5",
+    "github>pilotariak/.github//.github/renovate/commitMessage.json5",
+    "github>pilotariak/.github//.github/renovate/labels.json5"
+  ],
+  "enabled": true,
+  "timezone": "Europe/Paris",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dashboard",
+  // Do not notify on closed unmerged PRs
+  "suppressNotifications": ["prIgnoreNotification"],
+  // Do not rebase PRs
+  "rebaseWhen": "conflicted",
+  "assignees": ["@nlamirault"],
+  "reviewersFromCodeOwners": true,
+  // Refresh Cargo.lock and bun.lock every week. The cargo and bun managers update direct
+  // dependencies only, so this is how transitive ones move, among them jiff-tzdb: jiff embeds
+  // Europe/Paris from jiff-tzdb at build time (see Cargo.toml), and a tzdata update needs it.
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  // rust-toolchain.toml needs no config: the built-in rust-toolchain manager updates its
+  // channel, and the cargo manager runs cargo with that version.
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "worker-build and cargo-deny pins of the wrangler.jsonc build command and the CI",
+      "managerFilePatterns": ["/^wrangler\\.jsonc$/", "/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": ["(?<depName>worker-build|cargo-deny)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "crate",
+      // `cargo install crate@0.9.0` installs exactly 0.9.0: not a caret range as in Cargo.toml.
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "hawkeye pin of the Prek workflow",
+      "managerFilePatterns": ["/^\\.github/workflows/prek\\.yml$/"],
+      "matchStrings": ["hawkeye@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "hawkeye",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "taplo pin of the Prek workflow (crate taplo-cli)",
+      "managerFilePatterns": ["/^\\.github/workflows/prek\\.yml$/"],
+      "matchStrings": ["taplo@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "taplo-cli",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "worker-build pin of the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["WORKER_BUILD_VERSION = (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "worker-build",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "cargo-deny pin of the Makefile",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["CARGO_DENY_VERSION = (?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "cargo-deny",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Labels for the Rust crates, the Rust toolchain and the cargo tools",
+      "matchDatasources": ["crate", "rust-version"],
+      "addLabels": ["kind/renovate", "dependency/rust", "lifecycle/active", "status/review_needed", "size/xs"]
+    },
+    {
+      "description": "Labels for the npm packages and bun",
+      "matchManagers": ["bun"],
+      "addLabels": ["kind/renovate", "lifecycle/active", "status/review_needed", "size/xs"]
+    },
+    {
+      "description": "Labels for the lock file maintenance",
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "addLabels": ["kind/renovate", "lifecycle/active", "status/review_needed", "size/xs"]
+    },
+    {
+      "description": "The worker crate and every worker-build pin move together, in one pull request",
+      "matchPackageNames": ["worker", "worker-build"],
+      "groupName": "workers-rs",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Write the new worker version in Cargo.toml, not only in Cargo.lock, to match the worker-build pins",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["worker"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "wrangler and miniflare move together: miniflare stays at the version wrangler bundles",
+      "matchPackageNames": ["wrangler", "miniflare"],
+      "groupName": "wrangler",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "wrangler bundles a miniflare prerelease (5.x-beta), above the npm latest tag (4.x): follow the highest version",
+      "matchPackageNames": ["miniflare"],
+      "ignoreUnstable": false,
+      "respectLatest": false
+    }
+  ]
+}

@@ -2,6 +2,7 @@
   "name": "pik",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.4",
   "engines": {
     "node": ">=22.12.0"
   },

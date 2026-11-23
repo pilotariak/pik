@@ -12,6 +12,7 @@ includes = [
   "*.toml",
   "*.sh",
   "*.jsonc",
+  "*.json5",
   "*.sql",
   "*.mjs",
   "*.html",
@@ -31,5 +32,5 @@ excludes = [
 
 # hawkeye has no built-in comment style for these extensions.
 [[rules]]
-extensions = ["jsonc", "mjs"]
+extensions = ["jsonc", "json5", "mjs"]
 style_out = "doubleslash"

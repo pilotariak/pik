@@ -45,8 +45,10 @@ pik/
 │   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
+├── deny.toml               # cargo-deny: advisories, licenses, bans and sources of the crates
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
-└── package.json            # wrangler and miniflare (pinned), dev, deploy, migration and query scripts
+├── package.json            # Pinned wrangler and miniflare, bun version, dev, deploy, migration and query scripts
+└── bun.lock                # bun lock file of the JavaScript dependencies
 ```
 
 `worker-build` compiles the crate to `wasm32-unknown-unknown` and writes `build/index.js` and `build/index_bg.wasm`.
@@ -115,18 +117,22 @@ Azkena and Xilo landing pages (design tokens from frontis `DESIGN.md`).
 Requirements:
 
 - [rustup](https://rustup.rs). `rust-toolchain.toml` pins the toolchain, rustfmt, clippy and the wasm target.
-- [Node.js](https://nodejs.org) ≥ 22.12 (required by Wrangler).
+- [Node.js](https://nodejs.org) ≥ 22.12 (required by Wrangler). Wrangler and the Worker tests run on Node.js.
+- [bun](https://bun.sh), the version of the `packageManager` field of `package.json`. bun installs the JavaScript
+  dependencies and runs the `package.json` scripts; `bun.lock` is the lock file (no `package-lock.json`).
 - [worker-build](https://crates.io/crates/worker-build) 0.9.0, the same version as the `worker` crate.
+- [cargo-deny](https://crates.io/crates/cargo-deny), the version of `CARGO_DENY_VERSION` in the Makefile, for
+  `make deny`.
 
 ```bash
-make install         # rustup toolchain install, cargo install worker-build, npm ci
+make install         # rustup toolchain install, cargo install worker-build and cargo-deny, bun install
 ```
 
 ## Running Locally
 
 ```bash
-make migrate-local   # npm run migrate:local: apply the migrations to the local D1
-make dev             # npm run dev: wrangler dev --persist-to .wrangler/state  →  http://localhost:8787
+make migrate-local   # bun run migrate:local: apply the migrations to the local D1
+make dev             # bun run dev: wrangler dev --persist-to .wrangler/state  →  http://localhost:8787
 ```
 
 ```bash
@@ -144,7 +150,7 @@ Managed like the Frontis databases. See [How to manage the D1 database](docs/how
   database has no tables until `make migrate-local` runs.
 - `make migrate-local`, `make migrate-remote`, `make migrate-list`, `make db-local SQL="..."` and
   `make db-remote SQL="..."` wrap the `package.json` scripts of the same names (`migrate:local`, …).
-- Create a migration with `npx wrangler d1 migrations create pilotariak-pik "<description>"`, then add the `-- SPDX`
+- Create a migration with `bunx wrangler d1 migrations create pilotariak-pik "<description>"`, then add the `-- SPDX`
   header from `hack/header.txt` at the top of the file.
 - Never edit a migration that has been applied remotely: add a new one. Never paste remote rows into an issue, a pull
   request or a log: they are private data.
@@ -153,21 +159,36 @@ Managed like the Frontis databases. See [How to manage the D1 database](docs/how
 
 ```bash
 make check           # cargo fmt --check, cargo clippy on wasm32-unknown-unknown
-make test            # worker-build, cargo test, then the Worker tests in Miniflare
-make lint            # prek run -a: license headers, formatting, YAML/TOML/JSON, secrets
+make doc             # cargo doc --no-deps --document-private-items on wasm32, rustdoc warnings denied
+make test            # worker-build, cargo test, then the Worker tests in Miniflare (bun run test)
+make deny            # cargo deny check: RustSec advisories, licenses, bans and sources (deny.toml)
+make lint            # prek run -a: license headers, formatting, YAML/TOML/JSON, Renovate, secrets, rustfmt, clippy
 ```
 
 - Pure Rust logic (calendar, states) gets unit tests in its module, run by `cargo test` on the host.
 - Behavior that needs the runtime (routes, D1, Cron, Rate Limiting) gets a test in `tests/`, which loads `build/` in
   Miniflare, as the workers-rs README recommends. Start the Worker with `startWorker()` from `tests/worker.mjs`, and
   declare a new binding there, so that every test file runs the same Worker.
+- The prek hooks `cargo-fmt` and `cargo-clippy` run the same commands as `make check`. `make deny` is not a hook: it
+  fetches the advisory database.
+- `make lint` needs prek ≥ the `minimum_prek_version` of `.pre-commit-config.yaml`.
 
-CI (`.github/workflows/ci.yml`) runs all of this on every pull request, and applies the migrations to a local D1.
+CI runs all of this on every pull request:
+
+- `ci.yml`, job `test`: rustfmt, clippy, `cargo doc`, `cargo test`, `worker-build`, `bun install --frozen-lockfile`, a
+  check that `miniflare` matches the version wrangler depends on, the migrations on a local D1, then the Worker tests.
+  The Rust cache (`Swatinem/rust-cache`) also holds `~/.cargo/bin`, so `cargo install worker-build` does nothing on a
+  cache hit. Only `main` saves the cache.
+- `ci.yml`, job `deny`: `cargo deny check`, with the cargo-deny release binary.
+- `prek.yml`: the prek hooks, except `cargo-fmt` and `cargo-clippy` (`--skip`), which `ci.yml` runs. It installs
+  hawkeye and taplo, the other `language: system` hooks.
+- `codeql.yml`: CodeQL on the Rust code (build mode `none`, through rust-analyzer, host target) and on the JavaScript
+  tests, also weekly.
 
 ## Deployment
 
 ```bash
-make deploy          # make migrate-remote, then npm run deploy (wrangler deploy)
+make deploy          # make migrate-remote, then bun run deploy (wrangler deploy)
 ```
 
 `wrangler deploy` attaches the Custom Domain `pik.pilotariak.com` declared in `routes`, then
@@ -188,13 +209,19 @@ All are in workers-rs 0.9.0:
 ## Key Conventions
 
 - Keep versions in step: the `worker` crate and `worker-build` (Cargo.toml, `wrangler.jsonc`, Makefile, CI); `wrangler`
-  and `miniflare` at the versions wrangler bundles; `compatibility_date` no later than the workerd that wrangler
-  bundles.
+  and `miniflare` at the versions wrangler bundles, both exact; `compatibility_date` no later than the workerd that
+  wrangler bundles; `cargo-deny` (Makefile, CI).
+- Renovate (`.github/renovate.json5`) does most of it: one pull request for `worker` and every `worker-build` pin
+  (custom regex managers for the pins outside Cargo.toml), one for `wrangler` and `miniflare`, weekly lock file
+  maintenance for `Cargo.lock` and `bun.lock` (the only way transitive crates such as jiff-tzdb move), and the
+  built-in `rust-toolchain` manager for `rust-toolchain.toml`. It does not move `compatibility_date`: a wrangler update
+  only raises the latest date allowed. A new pin of a tool version needs a custom manager there.
+- JavaScript dependencies go through bun: `bun add -d -E <package>`, `bun.lock` committed, never `npm install`.
 - Do not bump `version` in `Cargo.toml` by hand: release-please does it from conventional commits.
 - `Cargo.toml` forbids `unsafe` code and turns on `clippy::pedantic`, and `make check` fails on any warning. Silence a
   lint with `#[expect(lint, reason = "...")]`, never `#[allow]`. In tests, import items by name (no `use super::*`) and
   give every assertion a message.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) and carry a DCO `Signed-off-by`
   (`git commit -s`, see CONTRIBUTING.md).
-- License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC and
-  JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.
+- License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC,
+  JSON5 and JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.
