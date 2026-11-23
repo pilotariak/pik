@@ -65,6 +65,21 @@ repos:
     language: system
     types: [toml]
     priority: 3
+  # Rust: the same commands as `make check`. The Prek workflow skips them: ci.yml runs them.
+  - id: cargo-fmt
+    name: "✅ rust / Check formatting (cargo fmt)"
+    entry: cargo fmt --check
+    language: system
+    types: [rust]
+    pass_filenames: false
+    priority: 10
+  - id: cargo-clippy
+    name: "✅ rust / Lint wasm32 (cargo clippy)"
+    entry: cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings
+    language: system
+    files: (\.rs|^Cargo\.(toml|lock)|^rust-toolchain\.toml)$
+    pass_filenames: false
+    priority: 10
 - repo: https://github.com/google/yamlfmt
   rev: 21ca5323a9c87ee37a434e0ca908efc0a89daa07 # frozen: v0.21.0
   hooks:

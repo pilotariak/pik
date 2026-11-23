@@ -50,16 +50,19 @@ check-%:
 		echo -e "$(ERROR_COLOR)$(KO)$(NO_COLOR) $*"; \
 	fi
 
+# Renovate keeps these pins in step with Cargo.toml, wrangler.jsonc and the CI.
 WORKER_BUILD_VERSION = 0.9.0
+CARGO_DENY_VERSION = 0.22.0
 
 ##@ Development
 
 .PHONY: install
-install: ## Install the Rust toolchain, worker-build and the npm dependencies
+install: ## Install the Rust toolchain, worker-build, cargo-deny and the bun dependencies
 	@echo -e "$(INFO)$(INFO_COLOR)[Install] Installing dependencies$(NO_COLOR)"
 	rustup toolchain install
 	cargo install --locked worker-build@$(WORKER_BUILD_VERSION)
-	npm ci
+	cargo install --locked cargo-deny@$(CARGO_DENY_VERSION)
+	bun install
 
 .PHONY: build
 build: ## Build the Worker into build/ (worker-build)
@@ -69,7 +72,7 @@ build: ## Build the Worker into build/ (worker-build)
 .PHONY: dev
 dev: ## Start local dev server (wrangler dev)
 	@echo -e "$(INFO)$(INFO_COLOR)[Dev] Starting Cloudflare Worker$(NO_COLOR)"
-	npm run dev
+	bun run dev
 
 .PHONY: check
 check: ## Check formatting and run clippy
@@ -77,11 +80,21 @@ check: ## Check formatting and run clippy
 	cargo fmt --check
 	cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings
 
+.PHONY: doc
+doc: ## Build the documentation, private items included, and fail on any rustdoc warning
+	@echo -e "$(INFO)$(INFO_COLOR)[Doc] cargo doc$(NO_COLOR)"
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --target wasm32-unknown-unknown
+
+.PHONY: deny
+deny: ## Check the crates: advisories, licenses, bans and sources (deny.toml)
+	@echo -e "$(INFO)$(INFO_COLOR)[Deny] cargo deny check$(NO_COLOR)"
+	cargo deny check
+
 .PHONY: test
 test: build ## Run the Rust unit tests, then the Worker tests in Miniflare
 	@echo -e "$(INFO)$(INFO_COLOR)[Test] Running tests$(NO_COLOR)"
 	cargo test
-	npm test
+	bun run test
 
 .PHONY: lint
 lint: ## Run the prek hooks on all files
@@ -93,32 +106,32 @@ lint: ## Run the prek hooks on all files
 .PHONY: migrate-local
 migrate-local: ## Apply the D1 migrations to the local database
 	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations locally$(NO_COLOR)"
-	npm run migrate:local
+	bun run migrate:local
 
 .PHONY: migrate-remote
 migrate-remote: ## Apply the D1 migrations to the remote database
 	@echo -e "$(INFO)$(INFO_COLOR)[DB] Applying migrations remotely$(NO_COLOR)"
-	npm run migrate:remote
+	bun run migrate:remote
 
 .PHONY: migrate-list
 migrate-list: ## List applied and pending migrations of the local database
 	@echo -e "$(INFO)$(INFO_COLOR)[DB] Listing local migrations$(NO_COLOR)"
-	npm run migrate:list
+	bun run migrate:list
 
 .PHONY: db-local
 db-local: guard-SQL ## Run SQL on the local database: make db-local SQL="SELECT ..."
-	npm run db:local -- "$(SQL)"
+	bun run db:local -- "$(SQL)"
 
 .PHONY: db-remote
 db-remote: guard-SQL ## Run SQL on the remote database: make db-remote SQL="SELECT ..."
-	npm run db:remote -- "$(SQL)"
+	bun run db:remote -- "$(SQL)"
 
 ##@ Deployment
 
 .PHONY: deploy
 deploy: migrate-remote ## Apply the D1 migrations remotely, then deploy the Worker
 	@echo -e "$(INFO)$(INFO_COLOR)[Deploy] Deploying to production$(NO_COLOR)"
-	npm run deploy
+	bun run deploy
 
 ##@ Maintenance
 

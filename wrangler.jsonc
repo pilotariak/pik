@@ -23,7 +23,7 @@
   ],
   // Slots, members, answers and lineups: private data of a group of friends. The database
   // is restricted to the EU jurisdiction, so its data is stored and processed in the EU:
-  //   npx wrangler d1 create pilotariak-pik --jurisdiction eu
+  //   bunx wrangler d1 create pilotariak-pik --jurisdiction eu
   "d1_databases": [
     {
       "binding": "DB",

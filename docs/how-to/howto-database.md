@@ -14,7 +14,7 @@ The database holds private data of groups of friends: first names or nicknames, 
 jurisdiction keeps that data stored and processed in the EU. It was created once with:
 
 ```bash
-npx wrangler d1 create pilotariak-pik --jurisdiction eu
+bunx wrangler d1 create pilotariak-pik --jurisdiction eu
 ```
 
 ---
@@ -42,7 +42,7 @@ binds the database.
 Apply pending migrations to the local SQLite file used by `wrangler dev`:
 
 ```bash
-make migrate-local       # npm run migrate:local
+make migrate-local       # bun run migrate:local
 ```
 
 This runs:
@@ -60,7 +60,7 @@ pending migrations (`0002_slots_schema.sql` creates the slots schema), and a que
 Apply pending migrations to the live database:
 
 ```bash
-make migrate-remote      # npm run migrate:remote
+make migrate-remote      # bun run migrate:remote
 ```
 
 `make deploy` runs it before `wrangler deploy`, so the schema is in place before the code that uses it.
@@ -69,7 +69,7 @@ make migrate-remote      # npm run migrate:remote
 
 ```bash
 make migrate-list                                         # local
-npx wrangler d1 migrations list pilotariak-pik --remote   # remote
+bunx wrangler d1 migrations list pilotariak-pik --remote  # remote
 ```
 
 ---
@@ -82,16 +82,16 @@ Frontis. Data written by `make dev` is immediately visible to `make db-local`.
 
 ```bash
 make db-local SQL="SELECT name FROM sqlite_master WHERE type = 'table'"
-npm run db:local -- "SELECT name FROM sqlite_master WHERE type = 'table'"
+bun run db:local -- "SELECT name FROM sqlite_master WHERE type = 'table'"
 ```
 
 For scripts, ask for JSON and use `jq`, or put a long query in a file:
 
 ```bash
-npx wrangler d1 execute pilotariak-pik --local --persist-to .wrangler/state --json \
+bunx wrangler d1 execute pilotariak-pik --local --persist-to .wrangler/state --json \
   --command "SELECT name FROM sqlite_master" | jq '.[0].results'
 
-npx wrangler d1 execute pilotariak-pik --local --persist-to .wrangler/state --file query.sql
+bunx wrangler d1 execute pilotariak-pik --local --persist-to .wrangler/state --file query.sql
 ```
 
 ### Interactive shell with sqlite3
@@ -116,15 +116,15 @@ The Worker tests (`make test`) do not use this state: they run in Miniflare with
 The production database is queried the same way, with `--remote`. Every query runs on Cloudflare D1.
 
 ```bash
-npx wrangler whoami      # logged in? Otherwise: npx wrangler login
+bunx wrangler whoami      # logged in? Otherwise: bunx wrangler login
 make db-remote SQL="SELECT count(*) FROM d1_migrations"
-npx wrangler d1 execute pilotariak-pik --remote --json --command "SELECT ..." | jq '.[0].results'
+bunx wrangler d1 execute pilotariak-pik --remote --json --command "SELECT ..." | jq '.[0].results'
 ```
 
 - The rows are private data. Read only what you need, and never paste them into an issue, a pull request or a log.
 - A `DELETE` or `UPDATE` changes production at once. To undo a mistake, D1 Time Travel restores the database to a point
   of the last 30 days:
-  `npx wrangler d1 time-travel restore pilotariak-pik --timestamp=<unix or RFC 3339>`.
+  `bunx wrangler d1 time-travel restore pilotariak-pik --timestamp=<unix or RFC 3339>`.
 - For an interactive console, open the Cloudflare dashboard: Storage & Databases → D1 → `pilotariak-pik` → Console.
 
 ---
@@ -132,7 +132,7 @@ npx wrangler d1 execute pilotariak-pik --remote --json --command "SELECT ..." | 
 ## Creating a new migration
 
 ```bash
-npx wrangler d1 migrations create pilotariak-pik "<description>"
+bunx wrangler d1 migrations create pilotariak-pik "<description>"
 ```
 
 This creates the next numbered file in `database/migrations/`. Add the `-- SPDX` header from `hack/header.txt` at the
