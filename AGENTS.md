@@ -18,19 +18,28 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 ```text
 pik/
 ├── src/
+│   ├── lib.rs              # Worker entry: #[event(fetch)] wires the api and web routes
+│   ├── api/
+│   │   ├── mod.rs          # routes(): the /api/v1 prefix (v1! macro), one module per resource
+│   │   └── health.rs       # GET /api/v1/health
 │   ├── calendar/           # Session calendar: pure functions, unit tests run by cargo test on the host
 │   │   ├── mod.rs          # Europe/Paris rules embedded by jiff, local date and time to instant
 │   │   ├── recurrence.rs   # Session dates: anchor_date + k × interval, up to season_end
 │   │   ├── deadline.rs     # Answer deadline of a session, Paris time
 │   │   ├── session.rs      # Effective values (slot or session_overrides) and state of a session
 │   │   └── call_order.rs   # Call order, and sessions played from lineup_entries
-│   └── lib.rs              # Worker entry: #[event(fetch)] and the router
+│   └── web/
+│       ├── mod.rs          # routes(): the public pages outside /api/
+│       ├── landing.rs      # GET /: version, CSP and Cache-Control
+│       └── landing.html    # The landing page, embedded with include_str!
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
-│   ├── health.test.mjs     # Worker tests: run build/ in Miniflare with node:test
+│   ├── worker.mjs          # Starts build/ in Miniflare, shared by the test files
+│   ├── health.test.mjs     # Worker tests, run with node:test
+│   ├── landing.test.mjs
 │   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
@@ -41,16 +50,51 @@ pik/
 `worker-build` compiles the crate to `wasm32-unknown-unknown` and writes `build/index.js` and `build/index_bg.wasm`.
 `wrangler dev` and `wrangler deploy` run it through the `build` command of `wrangler.jsonc`.
 
+## Module layout
+
+One crate split into modules, in the `mod.rs` style. Modules are private or `pub(crate)`: the crate is a `cdylib`, so
+nothing needs `pub`. New code goes here:
+
+- **`api/`**: one file per resource, named like the resource cards of the landing page and the OpenAPI tags
+  (`slots.rs`, `join.rs`, `members.rs`, `sessions.rs`, `lineups.rs`, `recovery.rs`). A file holds the resource's
+  handlers, its request and response types, and its `#[utoipa::path]` annotations. `api/mod.rs` registers them with
+  `v1!("/path")`, the only place the version appears; a breaking change adds `api/v2/` for the handlers that change
+  only. Code shared by the routes gets its own file: `auth.rs` (player token, `Origin` check, organizer role),
+  `problem.rs` (RFC 9457 errors), `idempotency.rs`, `openapi.rs`.
+- **`domain/`**: pure logic and types: the calendar (`calendar/` of #3 moves here once merged), session states,
+  ids, invite code, player token. It never imports `worker`, so `cargo test` runs it on the host.
+- **`db/`**: D1 queries, one file per table, returning `domain` types.
+- **`web/`**: the public pages outside `/api/`.
+- **`purge.rs`**: the daily Cron of #5, called from an `#[event(scheduled)]` handler in `lib.rs`.
+
+Dependencies point one way: `api` uses `db` and `domain`, `db` uses `domain`, `domain` uses neither. workers-rs has
+no middleware: what every response needs (security headers, `Cache-Control: private, no-store`, problem+json instead
+of the Router's plain-text 404 and 405 on `/api/*`) goes after `router.run()` in `fetch`. Tests follow the same split:
+`tests/<resource>.test.mjs`.
+
 ## Routes
 
-Every route lives under `/api/v1/`. Installed app versions stay in use for months, so a breaking change goes to
+Every API route lives under `/api/v1/`. Installed app versions stay in use for months, so a breaking change goes to
 `/api/v2/` while `/api/v1/` keeps working. If Kancha web forwards `/api/*` to pik unchanged (kancha ADR-0004, still
 proposed), a cookie with the path `/api` covers every version whether a client calls pik directly or through the
-Kancha origin.
+Kancha origin. Only the landing page lives outside `/api/`. The workers-rs `Router` answers 405 to any other method
+on a registered path.
 
-| Method | Path             | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| `GET`  | `/api/v1/health` | Liveness check: `{"status":"ok"}` |
+| Method | Path             | Description                                                         |
+| ------ | ---------------- | ------------------------------------------------------------------- |
+| `GET`  | `/`              | Landing page (HTML): what pik is, its resources, live health status |
+| `GET`  | `/api/v1/health` | Liveness check: `{"status":"ok"}`                                   |
+
+### Landing page
+
+`src/web/landing.html` is one HTML document with inline CSS and script, no build step, in the style of the Frontis,
+Azkena and Xilo landing pages (design tokens from frontis `DESIGN.md`).
+
+- `__PIK_VERSION__` is replaced with `CARGO_PKG_VERSION` when the page is served.
+- `GET /` sends `Content-Security-Policy` (Azkena's policy plus `connect-src 'self'` for the status script) and
+  `Cache-Control: public, max-age=300`: the page holds no private data. A new origin on the page needs a CSP change.
+- The resource cards follow the routes of #4. Keep them in step with the OpenAPI contract, and never put slot,
+  member or answer data, or real player or venue names, on the page.
 
 ## Rules the next issues must keep
 
@@ -61,7 +105,7 @@ Kancha origin.
   slot's data once it is no longer needed.
 - **Dates in `Europe/Paris`.** Session dates, answer deadlines and the purge are computed in `Europe/Paris`. Cron
   Triggers run in UTC, and the offset is one hour in winter and two in summer.
-- **Routes under `/api/v1/`**, as above.
+- **API routes under `/api/v1/`**, as above. Only the landing page (`GET /`) lives outside it.
 
 ## Dev Setup
 
@@ -112,7 +156,8 @@ make lint            # prek run -a: license headers, formatting, YAML/TOML/JSON,
 
 - Pure Rust logic (calendar, states) gets unit tests in its module, run by `cargo test` on the host.
 - Behavior that needs the runtime (routes, D1, Cron, Rate Limiting) gets a test in `tests/`, which loads `build/` in
-  Miniflare, as the workers-rs README recommends.
+  Miniflare, as the workers-rs README recommends. Start the Worker with `startWorker()` from `tests/worker.mjs`, and
+  declare a new binding there, so that every test file runs the same Worker.
 
 CI (`.github/workflows/ci.yml`) runs all of this on every pull request, and applies the migrations to a local D1.
 
@@ -143,7 +188,10 @@ All are in workers-rs 0.9.0:
   and `miniflare` at the versions wrangler bundles; `compatibility_date` no later than the workerd that wrangler
   bundles.
 - Do not bump `version` in `Cargo.toml` by hand: release-please does it from conventional commits.
+- `Cargo.toml` forbids `unsafe` code and turns on `clippy::pedantic`, and `make check` fails on any warning. Silence a
+  lint with `#[expect(lint, reason = "...")]`, never `#[allow]`. In tests, import items by name (no `use super::*`) and
+  give every assertion a message.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) and carry a DCO `Signed-off-by`
   (`git commit -s`, see CONTRIBUTING.md).
 - License headers are required on every source and config file (checked by `licenserc.toml`): `//` for Rust, JSONC and
-  JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL.
+  JavaScript, `#` for TOML, YAML and the Makefile, `--` for SQL, `<!-- -->` after the doctype for HTML.
