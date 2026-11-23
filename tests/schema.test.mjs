@@ -1,19 +1,14 @@
 // SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
 // SPDX-License-Identifier: Apache-2.0
 
-// Applies database/migrations/*.sql to the D1 binding of the Worker, the way
-// `wrangler d1 migrations apply --local` does (wrangler's SQL splitter, then one batch per file,
-// without the d1_migrations bookkeeping), and checks what the schema promises: foreign keys and
+// Applies database/migrations/*.sql to the D1 binding of the Worker with applyMigrations() of
+// worker.mjs, and checks what the schema promises: foreign keys and
 // ON DELETE CASCADE are enforced, deleting a slot leaves none of its rows, and a member who
 // leaves keeps their answers and lineup entries and frees their name.
 
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { unstable_splitSqlQuery as splitSqlQuery } from "wrangler";
-import { startWorker } from "./worker.mjs";
-
-const migrations = "database/migrations";
+import { applyMigrations, startWorker } from "./worker.mjs";
 
 // Every table of the schema, by what ties its rows to a slot. A new table must be added here,
 // so that the deletion test covers it.
@@ -41,19 +36,7 @@ let db;
 before(async () => {
   mf = startWorker();
   db = await mf.getD1Database("DB");
-
-  const files = readdirSync(migrations)
-    .filter((file) => file.endsWith(".sql"))
-    .sort();
-  for (const file of files) {
-    const statements = splitSqlQuery(readFileSync(`${migrations}/${file}`, "utf8")).filter(
-      // 0001 holds comments only.
-      (statement) => statement.replace(/--.*$/gm, "").trim() !== "",
-    );
-    if (statements.length > 0) {
-      await db.batch(statements.map((statement) => db.prepare(statement)));
-    }
-  }
+  await applyMigrations(db);
 });
 
 after(async () => {

@@ -18,6 +18,21 @@ database_name = "pilotariak-pik"
 database_id = "cd93b8cb-8a84-4419-843b-db32b231cbc0"
 migrations_dir = "database/migrations"
 
+[[ratelimits]]
+name = "CREATE_SLOT_LIMITER"
+namespace_id = "1201"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "CLAIM_LIMITER"
+namespace_id = "1202"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RECOVER_LIMITER"
+namespace_id = "1203"
+simple = { limit = 5, period = 60 }
+
 [observability.logs]
 enabled = true
 invocation_logs = true

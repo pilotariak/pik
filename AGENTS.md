@@ -18,18 +18,41 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 ```text
 pik/
 ├── src/
-│   ├── lib.rs              # Worker entry: #[event(fetch)] wires the api and web routes
+│   ├── lib.rs              # Worker entry: #[event(fetch)] runs the router, then adds what every response needs
 │   ├── api/
-│   │   ├── mod.rs          # routes(): the /api/v1 prefix (v1! macro), one module per resource
-│   │   └── health.rs       # GET /api/v1/health
+│   │   ├── mod.rs          # routes(): the /api/v1 prefix (v1! macro), finish(): problem 404/405, Cache-Control
+│   │   ├── health.rs       # GET /api/v1/health
+│   │   ├── slots.rs        # POST /slots, GET /me, GET|PATCH|DELETE /slots/:id, invite code, list
+│   │   ├── join.rs         # GET /join/:code, POST /join/:code/claim, POST /join/:code/members
+│   │   ├── members.rs      # POST /slots/:id/members, PATCH …/:member, DELETE …/:member/claim, DELETE …/me
+│   │   ├── sessions.rs     # GET /slots/:id/sessions[/:date], PATCH …/:date, PUT …/answer, PUT …/guests
+│   │   ├── lineups.rs      # PUT /slots/:id/sessions/:date/lineup (If-Match)
+│   │   ├── recovery.rs     # POST /slots/:id/members/:member/recovery, POST /recover/:token
+│   │   ├── auth.rs         # Player token (Bearer or cookie), Origin check, membership, organizer role
+│   │   ├── problem.rs      # RFC 9457 errors, one stable type per error
+│   │   ├── idempotency.rs  # Idempotency-Key of POST /slots and POST …/recovery
+│   │   ├── rate_limit.rs   # Workers Rate Limiting bindings
+│   │   └── openapi.rs      # cfg(test) only: builds openapi.json and checks it is up to date
+│   ├── db/
+│   │   ├── mod.rs          # Parameter binding (numbers, Uint8Array for BLOBs), batch, row conversions
+│   │   └── <table>.rs      # One file per table: slots, players, members, session_overrides, answers, guests,
+│   │                       # lineups, lineup_entries, recoveries, idempotency_keys
 │   ├── domain/
 │   │   ├── mod.rs          # Pure logic and types, no worker import: unit tests run by cargo test on the host
-│   │   └── calendar/
-│   │       ├── mod.rs        # Europe/Paris rules embedded by jiff, local date and time to instant
-│   │       ├── recurrence.rs # Session dates: anchor_date + k × interval, up to season_end
-│   │       ├── deadline.rs   # Answer deadline of a session, Paris time
-│   │       ├── session.rs    # Effective values (slot or session_overrides) and state of a session
-│   │       └── call_order.rs # Call order, and sessions played from lineup_entries
+│   │   ├── calendar/
+│   │   │   ├── mod.rs        # Europe/Paris rules embedded by jiff, local date and time to instant
+│   │   │   ├── recurrence.rs # Session dates: anchor_date + k × interval, up to season_end
+│   │   │   ├── deadline.rs   # Answer deadline of a session, Paris time
+│   │   │   ├── session.rs    # Effective values (slot or session_overrides) and state of a session
+│   │   │   └── call_order.rs # Call order, and sessions played from lineup_entries
+│   │   ├── civil.rs        # YYYY-MM-DD and HH:MM forms of local dates and times
+│   │   ├── ids.rs          # Slot, member, guest and player ids: prefix and 128 random bits in base32
+│   │   ├── invite.rs       # Invite code: 8 characters without 0, O, 1 or I
+│   │   ├── lineup.rs       # Lineup rules: selection, games of two teams of two
+│   │   ├── name.rs         # Display names and their key (NFC, lowercase)
+│   │   ├── random.rs       # The CSPRNG (getrandom: Web Crypto in the Worker)
+│   │   ├── slot.rs         # Slot and member records, court, role, rules of a slot's values
+│   │   └── token.rs        # Player and recovery tokens, SHA-256, Idempotency-Key
 │   └── web/
 │       ├── mod.rs          # routes(): the public pages outside /api/
 │       ├── landing.rs      # GET /: version, CSP and Cache-Control
@@ -37,14 +60,19 @@ pik/
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
+│   ├── howto-api.md        # Call the API with curl: tokens, slots, joins, answers, lineups, recovery, errors
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
-│   ├── worker.mjs          # Starts build/ in Miniflare, shared by the test files
+│   ├── worker.mjs          # Starts build/ in Miniflare with the bindings of wrangler.toml; applies the migrations
+│   ├── api.mjs             # API test helpers: request, Paris dates, fixtures, the access check of /slots/:id routes
+│   ├── <resource>.test.mjs # slots, join, members, sessions, lineups, recovery, auth (token, Origin, headers)
 │   ├── health.test.mjs     # Worker tests, run with node:test
 │   ├── landing.test.mjs
 │   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
-├── wrangler.toml           # Worker config: build command, Custom Domain, D1 binding
+├── openapi.json            # OpenAPI 3.1 contract, generated by `make openapi`, published with each release
+├── wrangler.toml           # Worker config: build command, Custom Domain, D1 binding, rate limiters
 ├── Cargo.toml              # Crate (version managed by release-please)
+├── clippy.toml             # clippy settings: names doc comments may write without backticks
 ├── deny.toml               # cargo-deny: advisories, licenses, bans and sources of the crates
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
 ├── package.json            # Pinned wrangler and miniflare, bun version, dev, deploy, migration and query scripts
@@ -64,10 +92,15 @@ nothing needs `pub`. New code goes here:
   handlers, its request and response types, and its `#[utoipa::path]` annotations. `api/mod.rs` registers them with
   `v1!("/path")`, the only place the version appears; a breaking change adds `api/v2/` for the handlers that change
   only. Code shared by the routes gets its own file: `auth.rs` (player token, `Origin` check, organizer role),
-  `problem.rs` (RFC 9457 errors), `idempotency.rs`, `openapi.rs`.
+  `problem.rs` (RFC 9457 errors), `idempotency.rs`, `rate_limit.rs`, `openapi.rs`. `GET /me` lives in `slots.rs`,
+  like the slots card of the landing page.
+- **`api/openapi.rs`** and every `#[utoipa::path]` and `ToSchema` exist under `cfg(test)` only
+  (`#[cfg_attr(test, …)]`, utoipa is a dev-dependency): pik does not serve the document, so the wasm build carries
+  no schema code. Write a `#[schema(...)]` field attribute as `#[cfg_attr(test, schema(...))]` too.
 - **`domain/`**: pure logic and types: the calendar (`calendar/`: session dates, deadlines, effective values, session
-  states, call order, sessions played), ids, invite code, player token. It never imports `worker`, so `cargo test` runs
-  it on the host.
+  states, call order, sessions played), ids, invite code, tokens, names, lineup rules. It never imports `worker`, so
+  `cargo test` runs it on the host. Call the calendar, never re-implement it. `domain` reads no clock: the routes take
+  the time from the Worker (`worker::Date::now()`) and pass it in, and no header, parameter or variable overrides it.
 - **`db/`**: D1 queries, one file per table, returning `domain` types.
 - **`web/`**: the public pages outside `/api/`.
 - **`purge.rs`**: the daily Cron of #5, called from an `#[event(scheduled)]` handler in `lib.rs`.
@@ -85,10 +118,53 @@ proposed), a cookie with the path `/api` covers every version whether a client c
 Kancha origin. Only the landing page lives outside `/api/`. The workers-rs `Router` answers 405 to any other method
 on a registered path.
 
-| Method | Path             | Description                                                         |
-| ------ | ---------------- | ------------------------------------------------------------------- |
-| `GET`  | `/`              | Landing page (HTML): what pik is, its resources, live health status |
-| `GET`  | `/api/v1/health` | Liveness check: `{"status":"ok"}`                                   |
+Paths below are relative to `/api/v1`. **Token**: `—` none, `opt.` optional, `yes` required. **Role**: `member` of
+the slot (404 otherwise), `organizer` (403 for a player).
+
+| Method   | Path                                  | Token | Role      | Description                                                    |
+| -------- | ------------------------------------- | ----- | --------- | -------------------------------------------------------------- |
+| `GET`    | `/` (outside `/api/`)                 | —     |           | Landing page (HTML): what pik is, its resources, live status   |
+| `GET`    | `/health`                             | —     |           | Liveness check: `{"status":"ok"}`                              |
+| `POST`   | `/slots`                              | opt.  |           | Create: slot id, invite code, player token. `Idempotency-Key`  |
+| `GET`    | `/me`                                 | yes   |           | The player's slots, one card summary each                      |
+| `GET`    | `/slots/:id`                          | yes   | member    | Slot, members, upcoming sessions and their states              |
+| `PATCH`  | `/slots/:id`                          | yes   | organizer | Name, venue, times, minimum, places, target, deadline rule     |
+| `DELETE` | `/slots/:id`                          | yes   | organizer | Delete the slot and all its data                               |
+| `POST`   | `/slots/:id/invite-code`              | yes   | organizer | Rotate the invite code                                         |
+| `PUT`    | `/slots/:id/list`                     | yes   | organizer | Close or reopen the list of names                              |
+| `GET`    | `/join/:code`                         | —     |           | Preview, free names                                            |
+| `POST`   | `/join/:code/claim`                   | opt.  |           | "C'est moi" → player token. Rate limited                       |
+| `POST`   | `/join/:code/members`                 | opt.  |           | "Not in the list" (unless closed) → player token. Rate limited |
+| `POST`   | `/slots/:id/members`                  | yes   | organizer | Add a name                                                     |
+| `PATCH`  | `/slots/:id/members/:member`          | yes   | organizer | Role, display name                                             |
+| `DELETE` | `/slots/:id/members/:member/claim`    | yes   | organizer | Release a name                                                 |
+| `DELETE` | `/slots/:id/members/me`               | yes   | member    | Leave                                                          |
+| `POST`   | `/slots/:id/members/:member/recovery` | yes   | organizer | Create a recovery link. `Idempotency-Key`                      |
+| `POST`   | `/recover/:token`                     | opt.  |           | Redeem a recovery link → player token. Rate limited            |
+| `GET`    | `/slots/:id/sessions?from=&to=`       | yes   | member    | Sessions in a date range, with their states                    |
+| `GET`    | `/slots/:id/sessions/:date`           | yes   | member    | One session, lineup version as `ETag`                          |
+| `PATCH`  | `/slots/:id/sessions/:date`           | yes   | organizer | Cancel or uncancel, note, minimum, places, deadline            |
+| `PUT`    | `/slots/:id/sessions/:date/answer`    | yes   | member    | My answer, or a member's (organizer). Only `ko` after deadline |
+| `PUT`    | `/slots/:id/sessions/:date/guests`    | yes   | organizer | Guests of one session                                          |
+| `PUT`    | `/slots/:id/sessions/:date/lineup`    | yes   | organizer | Selection and pairs: `If-Match` (412 stale, 428 missing)       |
+
+`openapi.json` describes every route, its bodies and errors, and [How to call the slots API](docs/how-to/howto-api.md)
+walks through them with `curl`. The rules behind them:
+
+- **Order of checks**: 401 (no token, or an unknown one: the join routes take an unknown token as none and create a
+  player), then 404 when the caller is not an active member of the slot, then 403 for a player on an organizer route,
+  then the path, body and state (422, 409, 412, 428). A non-member learns nothing about a slot.
+- **Errors** are `application/problem+json` with a stable `type`, `https://pik.pilotariak.com/problems/<name>`: the
+  list is the `ProblemType` enum of `problem.rs` and of `openapi.json`. Never rename one: Kancha maps them to messages.
+- **Tokens** come from `Authorization: Bearer` (native) or the `__Secure-pik_token` cookie (`HttpOnly`, `Secure`,
+  `SameSite=Lax`, `Path=/api`), set with `headers.append` on every response that issues a token. A write with the
+  cookie needs an `Origin` in `ALLOWED_ORIGINS` of `auth.rs` (`https://kancha.pilotariak.com` only); a 401 for an
+  unknown cookie token also deletes the cookie. pik sends no CORS header.
+- **Idempotency-Key** (UUID v4) on `POST /slots` and `POST …/recovery`: the same key, route, caller and body within 24
+  hours returns the first slot or link with a fresh token, which invalidates the first one; another request with the
+  key gets 422. `idempotency_keys` stores the SHA-256 of the key and the id of what was created, never a token.
+- **Writes that must not race** guard themselves inside one D1 batch: the lineup version (`If-Match`), the single use
+  of a recovery link, the last organizer (leave, role, release), the creation with an `Idempotency-Key`.
 
 ### Landing page
 
@@ -98,16 +174,17 @@ Azkena and Xilo landing pages (design tokens from frontis `DESIGN.md`).
 - `__PIK_VERSION__` is replaced with `CARGO_PKG_VERSION` when the page is served.
 - `GET /` sends `Content-Security-Policy` (Azkena's policy plus `connect-src 'self'` for the status script) and
   `Cache-Control: public, max-age=300`: the page holds no private data. A new origin on the page needs a CSP change.
-- The resource cards follow the routes of #4. Keep them in step with the OpenAPI contract, and never put slot,
-  member or answer data, or real player or venue names, on the page.
+- The resource cards list the routes above. Keep them in step with `openapi.json`, and never put slot, member or
+  answer data, or real player or venue names, on the page.
 
 ## Rules the next issues must keep
 
-- **No account.** pik has no sign-up, no sign-in, no password, no email and no phone number. How players are identified
-  without accounts is the subject of kancha ADR-0002, still proposed: follow it once it is accepted.
+- **No account.** pik has no sign-up, no sign-in, no password, no email and no phone number. Players are identified as
+  kancha ADR-0002 and ADR-0004 propose and #4 describes: one player token per device, organizer roles, recovery links
+  created by an organizer. Both ADRs are still proposed: align the code once they are accepted.
 - **Private data.** Slot data is personal data of a group of friends: first names or nicknames, answers, lineups. Only
-  the members of a slot read it. Never log a token or a player's data, store only a hash of a token, and delete a
-  slot's data once it is no longer needed.
+  the members of a slot read it. Never log a token, an `Idempotency-Key` or a player's data, store only the SHA-256 of
+  a token or a key, and delete a slot's data once it is no longer needed.
 - **Dates in `Europe/Paris`.** Session dates, answer deadlines and the purge are computed in `Europe/Paris`. Cron
   Triggers run in UTC, and the offset is one hour in winter and two in summer.
 - **API routes under `/api/v1/`**, as above. Only the landing page (`GET /`) lives outside it.
@@ -160,15 +237,26 @@ Managed like the Frontis databases. See [How to manage the D1 database](docs/how
 ```bash
 make check           # cargo fmt --check, cargo clippy on wasm32-unknown-unknown
 make doc             # cargo doc --no-deps --document-private-items on wasm32, rustdoc warnings denied
-make test            # worker-build, cargo test, then the Worker tests in Miniflare (bun run test)
+make test            # worker-build, cargo test (openapi.json check included), then the Worker tests (bun run test)
+make openapi         # regenerate openapi.json from the #[utoipa::path] annotations, then commit it
 make deny            # cargo deny check: RustSec advisories, licenses, bans and sources (deny.toml)
 make lint            # prek run -a: license headers, formatting, YAML/TOML/JSON, Renovate, secrets, rustfmt, clippy
 ```
 
-- Pure Rust logic (calendar, states) gets unit tests in its module, run by `cargo test` on the host.
+- Pure Rust logic (calendar, states, ids, tokens, names, lineup rules) gets unit tests in its module, run by
+  `cargo test` on the host.
+- `cargo test` also fails when `openapi.json` differs from the document generated from the code (`api/openapi.rs`):
+  the `#[utoipa::path]` annotations are not tied to the router, so change both, then run `make openapi`.
 - Behavior that needs the runtime (routes, D1, Cron, Rate Limiting) gets a test in `tests/`, which loads `build/` in
   Miniflare, as the workers-rs README recommends. Start the Worker with `startWorker()` from `tests/worker.mjs`, and
-  declare a new binding there, so that every test file runs the same Worker.
+  declare a new binding there, so that every test file runs the same Worker. `worker.mjs` reads the rate limiters of
+  `wrangler.toml`, so a new one needs no change there.
+- API tests use `startApi()` of `tests/api.mjs`, which applies the migrations. Every `/slots/:id` route runs
+  `checkAccess()`: 401 without a token or with an unknown one, 404 for a member of another slot, 403 for a player on
+  an organizer route, then the organizer's call. Each request gets its own `CF-Connecting-IP`, so a test that checks
+  a rate limit sets one.
+- Time-dependent rules (answer deadline, recovery expiry) are tested by writing past instants in D1 through the
+  binding (`session_overrides.deadline_at`, `recoveries.expires_at`, past session dates), never by waiting.
 - The prek hooks `cargo-fmt` and `cargo-clippy` run the same commands as `make check`. `make deny` is not a hook: it
   fetches the advisory database.
 - `make lint` needs prek ≥ the `minimum_prek_version` of `.pre-commit-config.yaml`.
@@ -179,11 +267,17 @@ CI runs all of this on every pull request:
   check that `miniflare` matches the version wrangler depends on, the migrations on a local D1, then the Worker tests.
   The Rust cache (`Swatinem/rust-cache`) also holds `~/.cargo/bin`, so `cargo install worker-build` does nothing on a
   cache hit. Only `main` saves the cache.
+- `ci.yml`, job `contract` (pull requests): `oasdiff breaking` between the `openapi.json` of the base branch and the
+  pull request's, through `oasdiff/oasdiff-action/breaking` pinned by commit SHA. An ERR-level change fails: a
+  breaking change goes to `/api/v2/`. The step is skipped while the base branch has no `openapi.json`. It uploads
+  nothing to oasdiff.com (`review: false`) and posts no comment.
 - `ci.yml`, job `deny`: `cargo deny check`, with the cargo-deny release binary.
 - `prek.yml`: the prek hooks, except `cargo-fmt` and `cargo-clippy` (`--skip`), which `ci.yml` runs. It installs
   hawkeye and taplo, the other `language: system` hooks.
 - `codeql.yml`: CodeQL on the Rust code (build mode `none`, through rust-analyzer, host target) and on the JavaScript
   tests, also weekly.
+- `release-please.yml`: once a release is created, `gh release upload` attaches the `openapi.json` of the released
+  commit to it.
 
 ## Deployment
 
@@ -195,17 +289,34 @@ make deploy          # make migrate-remote, then bun run deploy (wrangler deploy
 `https://pik.pilotariak.com/api/v1/health` answers. On the pilotariak.com zone, it creates the DNS record and the
 certificate. A Custom Domain takes a bare hostname, without a path or a wildcard.
 
-## Platform features the next issues use
+## Platform features
 
 All are in workers-rs 0.9.0:
 
-- **D1**: the `d1` feature of the `worker` crate, `env.d1("DB")`, prepared statements with `bind` and `batch`.
-- **Cron Triggers**: a `#[event(scheduled)]` handler receives a `ScheduledEvent`, and `triggers.crons` goes in
+- **D1**: the `d1` feature of the `worker` crate, `env.d1("DB")`, prepared statements with `bind` and `batch`. A batch
+  runs as one transaction. Bind integers and instants as JavaScript numbers (`db::int`): `D1Type::Integer` is an
+  `i32`, and D1 takes no `BigInt`. Bind a hash as a `Uint8Array` (`db::blob`), which D1 stores as a BLOB: a plain
+  array would never compare equal. Never read a BLOB back: compare it in SQL.
+- **Cron Triggers** (#5): a `#[event(scheduled)]` handler receives a `ScheduledEvent`, and `triggers.crons` goes in
   `wrangler.toml`.
-- **Rate Limiting binding**: `env.rate_limiter("NAME")?.limit(key)` returns `success`. The binding goes in `ratelimits`
-  in `wrangler.toml`.
+- **Rate Limiting binding**: `env.rate_limiter("NAME")?.limit(key)` returns `success`. The bindings are the
+  `[[ratelimits]]` of `wrangler.toml`, keyed by `CF-Connecting-IP`:
+
+  | Binding               | `namespace_id` | Limit         | Routes                                     |
+  | --------------------- | -------------- | ------------- | ------------------------------------------ |
+  | `CREATE_SLOT_LIMITER` | `1201`         | 5 per 60 s    | `POST /slots`                              |
+  | `CLAIM_LIMITER`       | `1202`         | 10 per 60 s   | `POST /join/:code/claim`, `…/members`      |
+  | `RECOVER_LIMITER`     | `1203`         | 5 per 60 s    | `POST /recover/:token`                     |
+
+  A `namespace_id` is an integer chosen in the config, unique in the Cloudflare account, not a resource to create:
+  azkena uses 1001 to 1003, frontis 1101 and up, pik 1201 and up. The period is 10 or 60 seconds, and 429 sends it as
+  `Retry-After` (`PERIOD_SECONDS` of `rate_limit.rs`): keep both at 60.
 - **Cookies**: workers-rs has no cookie helper. Read the `Cookie` request header, and add each `Set-Cookie` with
   `headers.append`, never `set`, so that one cookie does not replace another.
+- **Randomness**: ids, invite codes and tokens come from getrandom 0.4 with its `wasm_js` feature, which calls Web
+  Crypto `crypto.getRandomValues` on wasm32-unknown-unknown and needs no `--cfg` flag. Never use another source.
+- **Clock**: `worker::Date::now()`, read once per request by `api::now()`. `jiff::Timestamp::now()` panics on
+  wasm32-unknown-unknown.
 
 ## Key Conventions
 
@@ -217,6 +328,9 @@ All are in workers-rs 0.9.0:
   maintenance for `Cargo.lock` and `bun.lock` (the only way transitive crates such as jiff-tzdb move), and the
   built-in `rust-toolchain` manager for `rust-toolchain.toml`. It does not move `compatibility_date`: a wrangler update
   only raises the latest date allowed. A new pin of a tool version needs a custom manager there.
+- GitHub Actions are pinned by commit SHA with the version in a comment, `oasdiff/oasdiff-action` included: Renovate's
+  built-in `github-actions` manager moves them.
+- utoipa is a dev-dependency: the OpenAPI annotations compile for tests only (see Module layout).
 - JavaScript dependencies go through bun: `bun add -d -E <package>`, `bun.lock` committed, never `npm install`.
 - Do not bump `version` in `Cargo.toml` by hand: release-please does it from conventional commits.
 - `Cargo.toml` forbids `unsafe` code and turns on `clippy::pedantic`, and `make check` fails on any warning. Silence a
