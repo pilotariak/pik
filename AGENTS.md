@@ -18,13 +18,20 @@ database, served at `https://pik.pilotariak.com`. Kancha calls pik for slot data
 ```text
 pik/
 ├── src/
+│   ├── calendar/           # Session calendar: pure functions, unit tests run by cargo test on the host
+│   │   ├── mod.rs          # Europe/Paris rules embedded by jiff, local date and time to instant
+│   │   ├── recurrence.rs   # Session dates: anchor_date + k × interval, up to season_end
+│   │   ├── deadline.rs     # Answer deadline of a session, Paris time
+│   │   ├── session.rs      # Effective values (slot or session_overrides) and state of a session
+│   │   └── call_order.rs   # Call order, and sessions played from lineup_entries
 │   └── lib.rs              # Worker entry: #[event(fetch)] and the router
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
-│   └── health.test.mjs     # Worker tests: run build/ in Miniflare with node:test
+│   ├── health.test.mjs     # Worker tests: run build/ in Miniflare with node:test
+│   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
