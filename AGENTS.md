@@ -22,6 +22,14 @@ pik/
 │   ├── api/
 │   │   ├── mod.rs          # routes(): the /api/v1 prefix (v1! macro), one module per resource
 │   │   └── health.rs       # GET /api/v1/health
+│   ├── domain/
+│   │   ├── mod.rs          # Pure logic and types, no worker import: unit tests run by cargo test on the host
+│   │   └── calendar/
+│   │       ├── mod.rs        # Europe/Paris rules embedded by jiff, local date and time to instant
+│   │       ├── recurrence.rs # Session dates: anchor_date + k × interval, up to season_end
+│   │       ├── deadline.rs   # Answer deadline of a session, Paris time
+│   │       ├── session.rs    # Effective values (slot or session_overrides) and state of a session
+│   │       └── call_order.rs # Call order, and sessions played from lineup_entries
 │   └── web/
 │       ├── mod.rs          # routes(): the public pages outside /api/
 │       ├── landing.rs      # GET /: version, CSP and Cache-Control
@@ -33,7 +41,8 @@ pik/
 ├── tests/
 │   ├── worker.mjs          # Starts build/ in Miniflare, shared by the test files
 │   ├── health.test.mjs     # Worker tests, run with node:test
-│   └── landing.test.mjs
+│   ├── landing.test.mjs
+│   └── schema.test.mjs     # D1 tests: apply the migrations in Miniflare, check foreign keys and cascades
 ├── wrangler.jsonc          # Worker config: build command, Custom Domain, D1 binding
 ├── Cargo.toml              # Crate (version managed by release-please)
 ├── rust-toolchain.toml     # Pinned Rust toolchain and the wasm32-unknown-unknown target
@@ -54,8 +63,9 @@ nothing needs `pub`. New code goes here:
   `v1!("/path")`, the only place the version appears; a breaking change adds `api/v2/` for the handlers that change
   only. Code shared by the routes gets its own file: `auth.rs` (player token, `Origin` check, organizer role),
   `problem.rs` (RFC 9457 errors), `idempotency.rs`, `openapi.rs`.
-- **`domain/`**: pure logic and types: the calendar (`calendar/` of #3 moves here once merged), session states,
-  ids, invite code, player token. It never imports `worker`, so `cargo test` runs it on the host.
+- **`domain/`**: pure logic and types: the calendar (`calendar/`: session dates, deadlines, effective values, session
+  states, call order, sessions played), ids, invite code, player token. It never imports `worker`, so `cargo test` runs
+  it on the host.
 - **`db/`**: D1 queries, one file per table, returning `domain` types.
 - **`web/`**: the public pages outside `/api/`.
 - **`purge.rs`**: the daily Cron of #5, called from an `#[event(scheduled)]` handler in `lib.rs`.

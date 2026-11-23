@@ -24,9 +24,10 @@ npx wrangler d1 create pilotariak-pik --jurisdiction eu
 ```text
 database/
 └── migrations/
-    └── 0001_init.sql      ← empty: proves the migrations folder applies
-wrangler.jsonc             ← D1 binding DB, migrations_dir = database/migrations
-package.json               ← migration and query scripts
+    ├── 0001_init.sql          ← empty: proves the migrations folder applies
+    └── 0002_slots_schema.sql  ← slots, players, members, answers, guests, lineups…
+wrangler.jsonc                 ← D1 binding DB, migrations_dir = database/migrations
+package.json                   ← migration and query scripts
 ```
 
 Unlike Frontis, `database/` has no `wrangler.toml` of its own: pik is a single Worker, and its `wrangler.jsonc` already
@@ -50,7 +51,9 @@ This runs:
 wrangler d1 migrations apply pilotariak-pik --local --persist-to .wrangler/state
 ```
 
-Run it once after cloning, and after each new migration. Until then the local database has no tables.
+Run it once after cloning, and after each new migration. Until then the local database lacks the tables of the
+pending migrations (`0002_slots_schema.sql` creates the slots schema), and a query on them fails with
+`no such table`.
 
 ### Remote (production)
 
