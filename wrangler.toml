@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (C) Nicolas Lamirault <nicolas.lamirault@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+name = "pik"
+main = "build/index.js"
+compatibility_date = "2026-11-13"
+
+[build]
+command = "cargo install -q --locked worker-build@0.9.0 && worker-build --release"
+
+[[routes]]
+pattern = "pik.pilotariak.com"
+custom_domain = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pilotariak-pik"
+database_id = "cd93b8cb-8a84-4419-843b-db32b231cbc0"
+migrations_dir = "database/migrations"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
