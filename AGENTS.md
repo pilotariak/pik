@@ -60,6 +60,7 @@ pik/
 ├── database/
 │   └── migrations/         # D1 migrations, applied in order by wrangler
 ├── docs/how-to/
+│   ├── howto-api.md        # Call the API with curl: tokens, slots, joins, answers, lineups, recovery, errors
 │   └── howto-database.md   # Manage the D1 database: migrations, local and remote queries
 ├── tests/
 │   ├── worker.mjs          # Starts build/ in Miniflare with the bindings of wrangler.toml; applies the migrations
@@ -147,7 +148,8 @@ the slot (404 otherwise), `organizer` (403 for a player).
 | `PUT`    | `/slots/:id/sessions/:date/guests`    | yes   | organizer | Guests of one session                                          |
 | `PUT`    | `/slots/:id/sessions/:date/lineup`    | yes   | organizer | Selection and pairs: `If-Match` (412 stale, 428 missing)       |
 
-`openapi.json` describes every route, its bodies and errors. The rules behind them:
+`openapi.json` describes every route, its bodies and errors, and [How to call the slots API](docs/how-to/howto-api.md)
+walks through them with `curl`. The rules behind them:
 
 - **Order of checks**: 401 (no token, or an unknown one: the join routes take an unknown token as none and create a
   player), then 404 when the caller is not an active member of the slot, then 403 for a player on an organizer route,
