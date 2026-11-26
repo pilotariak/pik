@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/pilotariak/pik/compare/v0.1.0...v0.2.0) (2026-11-26)
+
+
+### 🚀 Features
+
+* **ids:** use UUID v7 for slot ids ([#21](https://github.com/pilotariak/pik/issues/21)) ([6113f00](https://github.com/pilotariak/pik/commit/6113f0067bbe90a9175d6448fa72d299f277809e)), closes [#20](https://github.com/pilotariak/pik/issues/20)
+
 ## 0.1.0 (2026-11-23)
 
 
