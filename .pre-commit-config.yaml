@@ -91,6 +91,8 @@ repos:
   hooks:
   - id: rumdl
     name: "📝 rumdl / Markdown linting"
+    # release-please writes CHANGELOG.md, with lines longer than MD013 allows.
+    exclude: ^CHANGELOG\.md$
     priority: 10
 # Lint
 - repo: https://github.com/compilerla/conventional-pre-commit
