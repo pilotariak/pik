@@ -139,7 +139,7 @@ curl -s -X POST "$BASE/slots" \
 ```
 
 ```json
-{"slot_id":"s_…","invite_code":"K7QW2MHT","member_id":"m_…","player_token":"…"}
+{"slot_id":"01a218cc-ba80-7c3e-9b4d-5f2a8e6c1d07","invite_code":"K7QW2MHT","member_id":"m_…","player_token":"…"}
 ```
 
 Keep the values for the next steps:
@@ -157,6 +157,9 @@ ORGANIZER=$(jq -r .player_token slot.json)
   time.
 - `court` is `trinquet`, `mur_a_gauche` or `place_libre`.
 - With a token, the slot goes to that device's player and `player_token` is `null`.
+- `slot_id` is a UUID v7 in lowercase with hyphens: its first 48 bits are the creation time in milliseconds, so anyone
+  who sees the id knows when the slot was created. The `/slots/:id` routes answer 404 to any other form, such as the
+  same UUID in uppercase.
 
 **Retry safely.** After a network failure, send the same request with the same `Idempotency-Key` (a UUID v4) within 24
 hours. pik returns the first slot instead of creating a second one, with a fresh token: the first token stops working,

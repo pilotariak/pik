@@ -21,6 +21,14 @@ import {
   world,
 } from "./api.mjs";
 
+// A slot id: a UUID v7 in its canonical form, lowercase, with the RFC 9562 variant.
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// The creation instant of a UUID v7, in milliseconds: its first 48 bits.
+function uuidMillis(id) {
+  return Number.parseInt(id.slice(0, 13).replace("-", ""), 16);
+}
+
 let mf;
 let db;
 let call;
@@ -35,9 +43,13 @@ after(async () => {
 
 describe("POST /slots", () => {
   test("without a token: 201, a new player token in the body and the cookie", async () => {
+    const sent = Date.now();
     const res = await call("POST", "/slots", { body: slotBody() });
+    const received = Date.now();
     assert.equal(res.status, 201, res.text);
-    assert.match(res.body.slot_id, /^s_[a-z2-7]{26}$/);
+    assert.match(res.body.slot_id, UUID_V7, "a lowercase canonical UUID v7");
+    const created = uuidMillis(res.body.slot_id);
+    assert.ok(sent <= created && created <= received, `timestamped ${created}, within [${sent}, ${received}]`);
     assert.match(res.body.member_id, /^m_[a-z2-7]{26}$/);
     assert.match(res.body.invite_code, /^[A-HJ-NP-Z2-9]{8}$/, "8 characters without 0, O, 1, I");
     assert.match(res.body.player_token, /^[a-z2-7]{52}$/);
@@ -310,7 +322,17 @@ describe("GET /slots/:id", () => {
 
   test("an id that cannot exist is a 404, like a slot of someone else", async () => {
     const w = await world(call);
-    assertProblem(await call("GET", "/slots/nope", { token: w.player.token }), 404, "not-found");
+    const version4 = randomUUID();
+    for (const id of [
+      "nope",
+      "s_abcdefghijklmnopqrstuvwxyz",
+      w.slot.toUpperCase(),
+      w.slot.replaceAll("-", ""),
+      `${w.slot.slice(0, 14)}4${w.slot.slice(15)}`,
+      version4,
+    ]) {
+      assertProblem(await call("GET", `/slots/${id}`, { token: w.player.token }), 404, "not-found");
+    }
   });
 });
 
