@@ -1900,7 +1900,8 @@
             "description": "A new player token when the device had none, or an unknown one; also set in the cookie.\n`null` when the device already had a player."
           },
           "slot_id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -2448,7 +2449,8 @@
             "$ref": "#/components/schemas/Court"
           },
           "id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           "member_id": {
             "type": "string"
@@ -2574,7 +2576,8 @@
             "description": "A new player token when the request came without one; also set in the cookie. `null`\nwhen the device already had a player."
           },
           "slot_id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -2644,7 +2647,8 @@
             "$ref": "#/components/schemas/DeadlineRuleView"
           },
           "id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid"
           },
           "invite_code": {
             "type": "string",

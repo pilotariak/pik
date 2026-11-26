@@ -48,7 +48,8 @@ pik/
 │   │   │   ├── session.rs    # Effective values (slot or session_overrides) and state of a session
 │   │   │   └── call_order.rs # Call order, and sessions played from lineup_entries
 │   │   ├── civil.rs        # YYYY-MM-DD and HH:MM forms of local dates and times
-│   │   ├── ids.rs          # Slot, member, guest and player ids: prefix and 128 random bits in base32
+│   │   ├── ids.rs          # Slot ids: UUID v7, the creation time then 74 random bits. Member, guest and player ids:
+│   │   │                   # prefix and 128 random bits in base32
 │   │   ├── invite.rs       # Invite code: 8 characters without 0, O, 1 or I
 │   │   ├── lineup.rs       # Lineup rules: selection, games of two teams of two
 │   │   ├── name.rs         # Display names and their key (NFC, lowercase)

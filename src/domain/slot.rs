@@ -271,7 +271,7 @@ mod tests {
 
     fn slot() -> Slot {
         Slot {
-            id: SlotId::parse("s_abcdefghijklmnopqrstuvwxyz").expect("should be an id"),
+            id: SlotId::parse("017f22e2-79b0-7cc3-98c4-dc0c0c07398f").expect("should be an id"),
             name: "  Mercredi  ".to_owned(),
             venue: "Trinquet".to_owned(),
             court: Court::Trinquet,

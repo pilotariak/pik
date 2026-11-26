@@ -113,6 +113,7 @@ pub(super) async fn preview(_req: Request, ctx: RouteContext<()>) -> ApiResult<R
 #[derive(Serialize)]
 #[cfg_attr(test, derive(utoipa::ToSchema))]
 pub(super) struct Joined {
+    #[cfg_attr(test, schema(format = "uuid"))]
     slot_id: String,
     member_id: String,
     /// A new player token when the device had none, or an unknown one; also set in the cookie.

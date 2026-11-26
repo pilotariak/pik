@@ -64,6 +64,7 @@ pub(super) struct DeadlineRuleView {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(utoipa::ToSchema))]
 pub(super) struct SlotView {
+    #[cfg_attr(test, schema(format = "uuid"))]
     id: String,
     name: String,
     venue: String,
@@ -161,6 +162,7 @@ pub(super) struct CreateSlot {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(utoipa::ToSchema))]
 pub(super) struct SlotCreated {
+    #[cfg_attr(test, schema(format = "uuid"))]
     slot_id: String,
     invite_code: String,
     /// The creator's member, an organizer.
@@ -183,10 +185,11 @@ fn display_name(field: &str, value: &str) -> ApiResult<DisplayName> {
 }
 
 impl CreateSlot {
-    fn slot(&self) -> ApiResult<Slot> {
+    /// The slot to create at `now`, the instant of the request: its id is a UUID v7 of `now`.
+    fn slot(&self, now: Timestamp) -> ApiResult<Slot> {
         let min_players = self.min_players.unwrap_or(4);
         let mut slot = Slot {
-            id: SlotId::generate()?,
+            id: SlotId::generate(now)?,
             name: self.name.clone(),
             venue: self.venue.clone(),
             court: self.court,
@@ -335,7 +338,7 @@ pub(super) async fn create(mut req: Request, ctx: RouteContext<()>) -> ApiResult
         return Ok(response);
     }
     let organizer_name = display_name("organizer_name", &request.organizer_name)?;
-    let mut slot = request.slot()?;
+    let mut slot = request.slot(now)?;
     let new_player = match caller {
         Some(_) => None,
         None => Some(NewPlayer::generate()?),
@@ -418,6 +421,7 @@ impl Creation<'_> {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(utoipa::ToSchema))]
 pub(super) struct SlotCard {
+    #[cfg_attr(test, schema(format = "uuid"))]
     id: String,
     name: String,
     role: Role,
